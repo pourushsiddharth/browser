@@ -46,7 +46,9 @@ Create a packaged Windows version with:
 npm run build
 ```
 
-The built files are placed in the `dist` folder.
+The built files are placed in the `dist` folder on your computer.
+
+You do not need to upload `dist` to GitHub. Keep the source files in the repo and build the app on your own machine when needed.
 
 ## Feedback and bug reports
 
