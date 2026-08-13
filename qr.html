@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scan QR Code</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --border-color: rgba(124, 58, 237, 0.08);
+      --border-focus: rgba(124, 58, 237, 0.3);
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent-color: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-muted: rgba(124, 58, 237, 0.08);
+      --shadow-premium: 0 20px 40px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0, 0, 0, 0.02);
+      --transition-smooth: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      background: transparent;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      -webkit-app-region: drag;
+    }
+
+    .modal-card {
+      width: 320px;
+      background: var(--bg-primary);
+      border-radius: 24px;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-premium);
+      padding: 24px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      animation: modal-appear 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+      -webkit-app-region: no-drag;
+      position: relative;
+    }
+
+    @keyframes modal-appear {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      -webkit-app-region: drag;
+    }
+
+    .modal-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+      letter-spacing: -0.3px;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      transition: var(--transition-smooth);
+      -webkit-app-region: no-drag;
+    }
+
+    .close-btn:hover {
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      transform: rotate(90deg);
+    }
+
+    .qr-preview-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .qr-image-wrapper {
+      width: 170px;
+      height: 170px;
+      background: #ffffff;
+      padding: 10px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(124, 58, 237, 0.05);
+    }
+
+    #qr-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transition: opacity 0.2s ease-in-out;
+      opacity: 1;
+    }
+
+    #qr-image.loading {
+      opacity: 0.3;
+    }
+
+    /* Premium Orbit Planetary logo overlay in center */
+    .qr-logo-overlay {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(124, 58, 237, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-smooth);
+      border: 1px solid rgba(124, 58, 237, 0.08);
+    }
+
+    .qr-logo-overlay svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .qr-preview-container:hover .qr-logo-overlay {
+      transform: scale(1.08);
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+    }
+
+    .url-input-container {
+      display: flex;
+      align-items: center;
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
+      background-color: var(--bg-secondary);
+      padding: 2px 2px 2px 10px;
+      transition: var(--transition-smooth);
+    }
+
+    .url-input-icon {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-smooth);
+    }
+
+    .url-input-container:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 4px var(--accent-muted);
+      background-color: var(--bg-primary);
+    }
+
+    .url-input-container:focus-within .url-input-icon {
+      color: var(--accent-color);
+    }
+
+    #url-input {
+      flex-grow: 1;
+      border: none;
+      background: transparent;
+      outline: none;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text-primary);
+      width: 100%;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .info-container {
+      position: relative;
+    }
+
+    .info-btn {
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      transition: var(--transition-smooth);
+    }
+
+    .info-btn:hover {
+      color: var(--text-secondary);
+      background-color: var(--bg-secondary);
+    }
+
+    /* Popover/Tooltip style */
+    .info-tooltip {
+      position: absolute;
+      bottom: 36px;
+      left: 0;
+      width: 180px;
+      background: var(--text-primary);
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 10px;
+      line-height: 1.4;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(4px);
+      transition: var(--transition-smooth);
+      z-index: 100;
+    }
+
+    .info-container:hover .info-tooltip {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      border: 1px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn.primary {
+      background-color: var(--accent-color);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+    }
+
+    .btn.primary:hover {
+      background-color: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(124, 58, 237, 0.22);
+    }
+
+    .btn.primary:active {
+      transform: translateY(0);
+    }
+
+    .btn.secondary {
+      background-color: var(--bg-primary);
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .btn.secondary:hover {
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    /* Success copied state */
+    .btn.secondary.success {
+      background-color: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.25);
+      color: #10b981;
+    }
+  </style>
+</head>
+<body>
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Scan QR Code</h3>
+      <button id="btn-close" class="close-btn" title="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="qr-preview-container">
+      <div class="qr-image-wrapper">
+        <img id="qr-image" src="" alt="Generating QR Code..." class="loading">
+      </div>
+      <!-- Premium Orbit logo overlay in center of QR code -->
+      <div class="qr-logo-overlay">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="orbitGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#7c3aed" />
+              <stop offset="100%" stop-color="#3b82f6" />
+            </linearGradient>
+          </defs>
+          <circle cx="12" cy="12" r="9" fill="url(#orbitGradient)"/>
+          <circle cx="12" cy="12" r="5" fill="#ffffff"/>
+          <circle cx="12" cy="12" r="3" fill="url(#orbitGradient)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="url-input-container">
+      <div class="url-input-icon">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+      </div>
+      <input type="text" id="url-input" placeholder="Type link to update QR Code" spellcheck="false">
+    </div>
+
+    <div class="modal-footer">
+      <div class="info-container">
+        <div class="info-btn">
+          <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </div>
+        <div class="info-tooltip">
+          Scan this code using your phone's camera to instantly open and visit the webpage.
+        </div>
+      </div>
+      <div class="button-group">
+        <button id="btn-copy" class="btn secondary">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy
+        </button>
+        <button id="btn-download" class="btn primary">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialUrl = urlParams.get('url') || 'https://google.com';
+
+    const qrImage = document.getElementById('qr-image');
+    const urlInput = document.getElementById('url-input');
+    const btnClose = document.getElementById('btn-close');
+    const btnCopy = document.getElementById('btn-copy');
+    const btnDownload = document.getElementById('btn-download');
+
+    // Remove loading state once image is successfully loaded from API
+    qrImage.addEventListener('load', () => {
+      qrImage.classList.remove('loading');
+    });
+
+    // Update QR Code image source
+    function updateQrCode(url) {
+      const targetUrl = url || 'https://orbit-browser.com';
+      const size = 300;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(targetUrl)}&margin=10`;
+      
+      if (qrImage.src !== qrUrl) {
+        qrImage.classList.add('loading');
+        qrImage.src = qrUrl;
+      }
+    }
+
+    // Set initial values
+    urlInput.value = initialUrl;
+    updateQrCode(initialUrl);
+
+    // Live update on input
+    urlInput.addEventListener('input', () => {
+      updateQrCode(urlInput.value.trim());
+    });
+
+    // Close window action
+    btnClose.addEventListener('click', () => {
+      api.send('close-qr-window');
+    });
+
+    // Copy to clipboard with micro-interaction feedback
+    btnCopy.addEventListener('click', () => {
+      const urlText = urlInput.value.trim();
+      if (urlText) {
+        navigator.clipboard.writeText(urlText).then(() => {
+          btnCopy.classList.add('success');
+          // Update button content with success icon and text
+          btnCopy.innerHTML = `
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Copied!
+          `;
+          
+          setTimeout(() => {
+            btnCopy.classList.remove('success');
+            btnCopy.innerHTML = `
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy
+            `;
+          }, 2000);
+        });
+      }
+    });
+
+    // Download QR Code image
+    btnDownload.addEventListener('click', async () => {
+      const urlText = urlInput.value.trim() || 'https://orbit-browser.com';
+      try {
+        const originalHtml = btnDownload.innerHTML;
+        btnDownload.innerHTML = `
+          <svg class="animate-spin" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.57-1.19"></path>
+          </svg>
+          Saving...
+        `;
+        
+        const size = 500; // Larger size for better print/scan resolution
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(urlText)}&margin=15`;
+        const response = await fetch(qrUrl);
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = localUrl;
+        a.download = 'orbit-qr-code.png';
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(localUrl);
+
+        // Success state
+        btnDownload.innerHTML = `
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Saved!
+        `;
+        
+        setTimeout(() => {
+          btnDownload.innerHTML = originalHtml;
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to download QR code image', err);
+      }
+    });
+  </script>
+  <!-- CSS Spin Animation helper -->
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</body>
+</html>

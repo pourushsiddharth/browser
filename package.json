@@ -1,0 +1,22 @@
+{
+  "name": "orbit-browser",
+  "version": "1.0.0",
+  "description": "Orbit - A sleek, minimalistic, ad-blocking browser using Electron and Chromium.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-packager . Orbit --platform=win32 --arch=x64 --overwrite --out=dist"
+  },
+  "keywords": [
+    "browser",
+    "electron",
+    "chromium",
+    "adblock"
+  ],
+  "author": "Orbit Developer",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}

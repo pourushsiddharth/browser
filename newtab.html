@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Tab</title>
+  <link rel="stylesheet" href="newtab.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Great+Vibes&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..700;1,400..700&family=Share+Tech+Mono&display=swap">
+</head>
+<body>
+  <!-- Animated Background Mesh -->
+  <div class="mesh-gradient"></div>
+  
+  <div class="container" id="homepage-content">
+    <!-- Logo Section -->
+    <div id="logo-section" class="logo-section"></div>
+
+    <!-- Clock & Greeting -->
+    <div class="time-greeting-section">
+      <div id="clock">12:00</div>
+      <div id="greeting">Hello, Explorer</div>
+    </div>
+
+    <!-- Central Search Bar -->
+    <div class="search-section">
+      <form id="search-form">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20">
+            <circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="search-input" placeholder="Search the web..." autofocus autocomplete="off" spellcheck="false">
+        </div>
+      </form>
+    </div>
+
+    <!-- Speed Dials (Quick Links) -->
+    <div class="speed-dials-container" id="speed-dials">
+      <a href="https://www.google.com" class="dial-card">
+        <div class="dial-icon bg-blue">G</div>
+        <span class="dial-label">Google</span>
+      </a>
+      <a href="https://github.com" class="dial-card">
+        <div class="dial-icon bg-dark">GH</div>
+        <span class="dial-label">GitHub</span>
+      </a>
+      <a href="https://www.youtube.com" class="dial-card">
+        <div class="dial-icon bg-red">YT</div>
+        <span class="dial-label">YouTube</span>
+      </a>
+      <a href="https://www.wikipedia.org" class="dial-card">
+        <div class="dial-icon bg-gray">W</div>
+        <span class="dial-label">Wikipedia</span>
+      </a>
+      <a href="https://www.reddit.com" class="dial-card">
+        <div class="dial-icon bg-orange">R</div>
+        <span class="dial-label">Reddit</span>
+      </a>
+      <a href="https://stackoverflow.com" class="dial-card">
+        <div class="dial-icon bg-orange-light">SO</div>
+        <span class="dial-label">StackOverflow</span>
+      </a>
+    </div>
+
+    <!-- Dashboard Widgets (Stats & Comparison) -->
+    <div class="dashboard-container" id="dashboard-widgets">
+      <!-- Shield Stats Card -->
+      <div class="dash-card stats-card">
+        <div class="dash-card-header">
+          <svg viewBox="0 0 24 24" class="dash-card-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <h3>Orbit Shield</h3>
+        </div>
+        <div class="dash-card-content">
+          <div class="stat-number" id="stat-blocked-count">0</div>
+          <p class="stat-label">Trackers & Ads Blocked</p>
+          <div class="insight-pill">
+            <span class="pulse-indicator"></span>
+            Shield Active & Protecting
+          </div>
+        </div>
+      </div>
+
+      <!-- Orbit vs Chrome Comparison Card -->
+      <div class="dash-card comparison-card">
+        <div class="dash-card-header">
+          <svg viewBox="0 0 24 24" class="dash-card-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 12h8M12 8v8"/>
+          </svg>
+          <h3>Orbit vs Chrome</h3>
+        </div>
+        <div class="dash-card-content">
+          <div class="comparison-row">
+            <span class="comp-feature">Ad Block</span>
+            <span class="comp-orbit">O(1) Domain Filter</span>
+            <span class="comp-chrome">Dynamic Rules</span>
+          </div>
+          <div class="comparison-row">
+            <span class="comp-feature">Speed</span>
+            <span class="comp-orbit">Up to 2.4x Faster</span>
+            <span class="comp-chrome">Standard</span>
+          </div>
+          <div class="comparison-row">
+            <span class="comp-feature">Focus</span>
+            <span class="comp-orbit">Reader Mode Cuts Feeds</span>
+            <span class="comp-chrome">Pushes Algorithmic Feeds</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Controls (Delightful Micro-Interaction) -->
+  <div class="bottom-controls">
+    <button id="settings-toggle" title="Customize Dashboard">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+    <button id="focus-toggle" title="Toggle Focus Mode">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Customizer Panel (Sleek Glassmorphic Sidebar) -->
+  <div id="customizer-panel" class="customizer-panel">
+    <div class="customizer-header">
+      <h3>Customize Page</h3>
+      <button id="customizer-close" title="Close Panel">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="customizer-sections" style="display: flex; flex-direction: column; gap: 16px;">
+      <!-- centerpiece selector -->
+      <div class="customizer-section-title">Centerpiece Widget</div>
+      <div class="customizer-item-group">
+        <label class="setting-label">Active Widget</label>
+        <select id="centerpiece-select" class="settings-select">
+          <option value="clock">Clock</option>
+          <option value="logo">Logo</option>
+        </select>
+      </div>
+
+      <!-- Quick Links toggle -->
+      <div class="customizer-item">
+        <div class="item-info">
+          <span class="item-title">Quick Links</span>
+          <span class="item-desc">Show your speed dial shortcuts</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-speed-dials" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Shield Stats toggle -->
+      <div class="customizer-item">
+        <div class="item-info">
+          <span class="item-title">Orbit Shield Stats</span>
+          <span class="item-desc">Show trackers & ads blocked count</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-shield-stats" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Orbit vs Chrome toggle -->
+      <div class="customizer-item">
+        <div class="item-info">
+          <span class="item-title">Orbit vs Chrome</span>
+          <span class="item-desc">Show comparison card</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-comparison" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script src="newtab.js"></script>
+</body>
+</html>

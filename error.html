@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connection Error</title>
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f3f4f6;
+      --border-color: rgba(0, 0, 0, 0.08);
+      --accent-color: #7c3aed;
+      --accent-hover: #6d28d9;
+      --text-primary: #1f2937;
+      --text-secondary: #4b5563;
+      --text-muted: #9ca3af;
+      --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #111827;
+        --bg-secondary: #1f2937;
+        --border-color: rgba(255, 255, 255, 0.08);
+        --text-primary: #f9fafb;
+        --text-secondary: #d1d5db;
+        --text-muted: #6b7280;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .error-container {
+      width: 420px;
+      padding: 40px;
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .icon-container {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background-color: rgba(124, 58, 237, 0.1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--accent-color);
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .details-box {
+      width: 100%;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: left;
+      word-break: break-all;
+      box-sizing: border-box;
+    }
+
+    .details-row {
+      margin-bottom: 6px;
+    }
+
+    .details-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .btn-retry {
+      width: 100%;
+      height: 40px;
+      border-radius: 8px;
+      border: none;
+      background-color: var(--accent-color);
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn-retry:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-retry:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="icon-container">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <h1 id="error-title">This site can’t be reached</h1>
+    <p id="error-desc">Check if there is a typo in the URL, or check your internet connection.</p>
+    
+    <div class="details-box">
+      <div class="details-row"><strong>URL:</strong> <span id="failed-url">Loading...</span></div>
+      <div class="details-row"><strong>Error Code:</strong> <span id="error-code">Loading...</span></div>
+    </div>
+    
+    <button class="btn-retry" id="btn-retry">Try Again</button>
+  </div>
+
+  <script>
+    // Parse URL query parameters
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get('url') || 'Unknown URL';
+    const errorCode = params.get('error') || 'ERR_FAILED';
+
+    document.getElementById('failed-url').textContent = url;
+    document.getElementById('error-code').textContent = errorCode;
+
+    document.getElementById('btn-retry').addEventListener('click', () => {
+      window.location.href = url;
+    });
+  </script>
+</body>
+</html>

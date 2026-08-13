@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbit Browser</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="chrome-hover-sensor"></div>
+  <!-- Main Custom Browser Chrome Container -->
+  <div id="browser-chrome">
+    
+    <!-- Titlebar Area with Integrated Tabs (custom framing) -->
+    <div id="titlebar">
+      <div class="drag-region">
+        <div id="tabs-list">
+          <!-- Rendered dynamically in renderer.js -->
+        </div>
+        <div id="tab-controls">
+          <button id="btn-new-tab" class="tab-control-btn" title="New Tab">
+            <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button id="btn-new-incognito-tab" class="tab-control-btn incognito-btn" title="New Incognito Tab">
+            <!-- Spy hat + sunglasses -->
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path d="M12 2L4 8l1.5 5.5L12 11l6.5 2.5L20 8z" fill="currentColor"/>
+              <rect x="3" y="14" width="18" height="2" rx="1" fill="currentColor"/>
+              <circle cx="8" cy="19" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+              <circle cx="16" cy="19" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+              <line x1="11" y1="19" x2="13" y2="19" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Custom Window Controls -->
+      <div class="window-controls">
+        <button id="btn-minimize" class="win-btn" title="Minimize">
+          <svg viewBox="0 0 10 10" width="10" height="10">
+            <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button id="btn-maximize" class="win-btn" title="Maximize/Restore">
+          <svg class="max-icon" viewBox="0 0 10 10" width="10" height="10">
+            <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2" rx="1"/>
+          </svg>
+          <svg class="restore-icon" viewBox="0 0 10 10" width="10" height="10">
+            <path d="M3.5,3.5 L3.5,1.5 L8.5,1.5 L8.5,6.5 L6.5,6.5" fill="none" stroke="currentColor" stroke-width="1.2" />
+            <rect x="1.5" y="3.5" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.2" rx="0.5"/>
+          </svg>
+        </button>
+        <button id="btn-close" class="win-btn close-btn" title="Close">
+          <svg viewBox="0 0 10 10" width="10" height="10">
+            <path d="M2,2 L8,8 M8,2 L2,8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation and URL Toolbar -->
+    <div id="toolbar">
+      <div class="nav-buttons">
+        <button id="btn-back" class="nav-btn" title="Back" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 12H5M12 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btn-forward" class="nav-btn" title="Forward" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 12h14M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btn-reload" class="nav-btn" title="Reload">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.57-1.19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btn-home" class="nav-btn" title="Home">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <!-- Address Input Area -->
+      <div id="address-container">
+        <!-- Shield Adblock Icon -->
+        <div id="adblock-shield" class="address-icon" title="Orbit Shield (Ad Blocker)">
+          <svg class="shield-svg" viewBox="0 0 24 24" width="16" height="16">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="blocked-count-badge">0</span>
+        </div>
+
+        <input type="text" id="address-bar" placeholder="Search Google or enter address" autocomplete="off" spellcheck="false">
+        
+        <!-- Bookmark Star Icon -->
+        <button id="btn-bookmark" class="address-icon-btn" title="Bookmark this page">
+          <svg class="star-svg" viewBox="0 0 24 24" width="16" height="16">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="utility-buttons" style="display: flex; gap: 4px; align-items: center; position: relative;">
+        <button id="btn-downloads-nav" class="nav-btn" title="Downloads">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span id="downloads-badge" class="downloads-badge-hidden">0</span>
+        </button>
+
+        <button id="btn-control-center" class="nav-btn" title="Control Center">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14"/>
+            <line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/>
+            <line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/>
+            <line x1="9" y1="8" x2="15" y2="8"/>
+            <line x1="17" y1="16" x2="23" y2="16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Smart Autocomplete Dropdown overlay -->
+    <div id="autocomplete-dropdown" class="autocomplete-hidden"></div>
+
+    <!-- Quick Bookmarks Bar -->
+    <div id="bookmarks-bar">
+      <div id="bookmarks-list">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+
+    <!-- Sliding Sidebar for History, Bookmarks, and Settings -->
+    <div id="sidebar" class="sidebar-hidden">
+      <div class="sidebar-header">
+        <button id="btn-sidebar-back" class="icon-btn" title="Back to Control Center" style="display: none; margin-right: 6px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"/>
+            <polyline points="12 19 5 12 12 5"/>
+          </svg>
+        </button>
+        <h3 id="sidebar-title">History</h3>
+        <button id="btn-close-sidebar" class="icon-btn">
+          <svg viewBox="0 0 24 24" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <!-- History Panel -->
+      <div id="panel-history" class="sidebar-panel">
+        <div class="panel-actions">
+          <button id="btn-clear-history" class="action-btn danger">Clear History</button>
+        </div>
+        <div id="history-items-list" class="list-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Bookmarks Panel -->
+      <div id="panel-bookmarks" class="sidebar-panel">
+        <div id="bookmarks-items-list" class="list-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Settings Panel -->
+      <div id="panel-settings" class="sidebar-panel">
+        <div class="settings-group">
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Enable Shield (Ad Blocker)</span>
+              <span class="setting-desc">Blocks ads, scripts, and trackers dynamically.</span>
+            </div>
+            <label class="switch shield-switch">
+              <input type="checkbox" id="toggle-adblock-setting" checked>
+              <span class="slider"></span>
+            </label>
+          </label>
+        </div>
+
+        <div class="settings-group">
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Search Engine</span>
+              <span class="setting-desc">Choose your default search engine.</span>
+            </div>
+            <select id="select-search-engine" class="settings-select">
+              <option value="https://www.google.com/search?q=">Google</option>
+              <option value="https://duckduckgo.com/?q=">DuckDuckGo</option>
+              <option value="https://www.bing.com/search?q=">Bing</option>
+            </select>
+          </label>
+        </div>
+
+
+
+        <div class="settings-group border-top">
+          <h4>About Orbit Browser</h4>
+          <p class="about-text">Version 1.0.0 (Chromium Core)<br>A sleek, privacy-focused browser built with Electron.</p>
+        </div>
+      </div>
+
+      <!-- Control Center Panel -->
+      <div id="panel-control-center" class="sidebar-panel">
+        <div class="settings-group">
+          <!-- Immersive Mode Row -->
+          <div class="control-row-sidebar">
+            <div class="control-info">
+              <span class="control-title">Immersive Mode</span>
+              <span class="control-desc">Focus View (Full Screen)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="sidebar-toggle-immersive">
+              <span class="slider"></span>
+            </label>
+          </div>
+          
+          <!-- Reader Mode Row -->
+          <div class="control-row-sidebar">
+            <div class="control-info">
+              <span class="control-title">Reader Mode</span>
+              <span class="control-desc">Clutter-Free Reading</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="sidebar-toggle-reader">
+              <span class="slider"></span>
+            </label>
+          </div>
+          
+          <!-- Compact Header Row -->
+          <div class="control-row-sidebar">
+            <div class="control-info">
+              <span class="control-title">Compact Header</span>
+              <span class="control-desc">Auto-hide browser bars</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="sidebar-toggle-collapse-chrome">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="popover-divider"></div>
+        
+        <div class="settings-group">
+          <button id="sidebar-btn-bookmarks" class="dropdown-action-btn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Bookmarks Manager</span>
+          </button>
+          
+          <button id="sidebar-btn-history" class="dropdown-action-btn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>History Log</span>
+          </button>
+
+          <button id="sidebar-btn-downloads" class="dropdown-action-btn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Downloads Manager</span>
+          </button>
+          
+          <button id="sidebar-btn-settings" class="dropdown-action-btn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span>Browser Settings</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Shield Panel -->
+      <div id="panel-shield" class="sidebar-panel">
+        <div class="settings-group">
+          <div class="control-row-sidebar">
+            <div class="control-info">
+              <span class="control-title">Enable Shield</span>
+              <span class="control-desc">Block ads and trackers dynamically</span>
+            </div>
+            <label class="switch shield-switch">
+              <input type="checkbox" id="sidebar-shield-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="popover-stats">
+            <span id="sidebar-blocked-count">0</span> trackers blocked on this page
+          </div>
+        </div>
+
+        <div class="popover-divider"></div>
+
+        <div class="list-container">
+          <h4 class="sidebar-section-title">Blocked Trackers</h4>
+          <div id="sidebar-trackers-list" class="popover-list">
+            <!-- Blocked trackers list -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Downloads Panel -->
+      <div id="panel-downloads" class="sidebar-panel">
+        <div class="panel-actions">
+          <button id="btn-clear-downloads" class="action-btn danger">Clear History</button>
+        </div>
+        <div id="downloads-items-list" class="list-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

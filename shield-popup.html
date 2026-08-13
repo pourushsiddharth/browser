@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbit Shield</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="shield-popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <div class="header-left">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span>Orbit Shield</span>
+      </div>
+      <button id="btn-close-popup" class="toast-close-btn" title="Close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer;">
+        <svg viewBox="0 0 10 10" width="8" height="8" stroke="currentColor" stroke-width="1.5" fill="none">
+          <path d="M1,1 L9,9 M9,1 L1,9" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Active Webpage Card -->
+    <div class="page-card">
+      <div class="page-info">
+        <div id="page-favicon-container" class="favicon-container">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </div>
+        <div id="page-domain" class="page-domain">Loading...</div>
+      </div>
+      <label class="switch shield-switch">
+        <input type="checkbox" id="shield-toggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Counters -->
+    <div class="stats-container">
+      <div class="stat-card">
+        <span id="stat-page-blocked" class="stat-value">0</span>
+        <span class="stat-label">Blocked on Page</span>
+      </div>
+      <div class="stat-card">
+        <span id="stat-global-blocked" class="stat-value">0</span>
+        <span class="stat-label">Blocked Globally</span>
+      </div>
+    </div>
+
+    <!-- Trackers List -->
+    <div class="trackers-section">
+      <div class="section-title">Blocked Trackers</div>
+      <div id="trackers-list" class="trackers-list">
+        <div class="empty-msg">No trackers blocked on this page.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="shield-popup.js"></script>
+</body>
+</html>
