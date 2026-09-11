@@ -1,11 +1,37 @@
 {
-  "name": "orbit-browser",
+  "name": "vayu-browser",
   "version": "1.0.0",
-  "description": "Orbit - A sleek, minimalistic, ad-blocking browser using Electron and Chromium.",
+  "description": "Vayu - A sleek, minimalistic, ad-blocking browser using Electron and Chromium.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-packager . Orbit --platform=win32 --arch=x64 --overwrite --out=dist"
+    "build": "electron-packager . Vayu --platform=win32 --arch=x64 --overwrite --out=dist",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.vayu.browser",
+    "productName": "Vayu",
+    "directories": {
+      "output": "dist/installer"
+    },
+    "win": {
+      "icon": "vayu_app_logo.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Vayu",
+      "license": "build/installer-license.txt",
+      "include": "build/vayu-installer.nsh",
+      "installerHeader": "installerHeader.bmp",
+      "installerSidebar": "installerSidebar.bmp",
+      "uninstallerSidebar": "installerSidebar.bmp"
+    }
   },
   "keywords": [
     "browser",
@@ -13,10 +39,11 @@
     "chromium",
     "adblock"
   ],
-  "author": "Orbit Developer",
+  "author": "Vayu Developer",
   "license": "MIT",
   "devDependencies": {
     "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "electron-packager": "^17.1.2"
   }
 }

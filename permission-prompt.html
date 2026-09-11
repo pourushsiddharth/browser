@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --primary-color: #2d6a4f;
+      --primary-hover: #1b4332;
+      --bg-color: rgba(255, 255, 255, 0.95);
+      --text-color: #2d3748;
+      --text-muted: #718096;
+      --border-color: rgba(0, 0, 0, 0.08);
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: transparent;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .prompt-banner {
+      background: var(--bg-color);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: rgba(0, 0, 0, 0.12) 0px 1px 3px, rgba(0, 0, 0, 0.24) 0px 1px 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 58px;
+      padding: 0 16px;
+      box-sizing: border-box;
+      animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideDown {
+      from {
+        transform: translateY(-20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .prompt-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-box {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(45, 106, 79, 0.1);
+      color: var(--primary-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .prompt-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .prompt-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-color);
+    }
+
+    .prompt-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .prompt-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color) 0%, #3e8e63 100%);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(45, 106, 79, 0.2);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      transform: translateY(-0.5px);
+    }
+
+    .btn-secondary {
+      background: rgba(0, 0, 0, 0.04);
+      color: var(--text-color);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0, 0, 0, 0.08);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="prompt-banner">
+    <div class="prompt-left">
+      <div class="icon-box" id="prompt-icon">
+        <!-- SVG injected dynamically -->
+      </div>
+      <div class="prompt-info">
+        <span class="prompt-title" id="prompt-title">Permission Request</span>
+        <span class="prompt-desc" id="prompt-desc">Loading...</span>
+      </div>
+    </div>
+    <div class="prompt-actions">
+      <button class="btn-secondary" id="btn-action-secondary">Block</button>
+      <button class="btn-primary" id="btn-action-primary">Allow</button>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const icons = {
+      location: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+      camera: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+      microphone: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>`,
+      clipboard: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>`
+    };
+
+    const readablePermissionNames = {
+      location: 'Location',
+      camera: 'Camera',
+      microphone: 'Microphone',
+      clipboard: 'Clipboard'
+    };
+
+    ipcRenderer.on('init-data', (event, { id, domain, type, permission }) => {
+      document.getElementById('prompt-icon').innerHTML = icons[permission] || icons.location;
+      const permName = readablePermissionNames[permission] || permission;
+
+      // Reset listeners
+      const btnPrimary = document.getElementById('btn-action-primary');
+      const btnSecondary = document.getElementById('btn-action-secondary');
+
+      // Clone buttons to clear previous event listeners cleanly
+      const newBtnPrimary = btnPrimary.cloneNode(true);
+      const newBtnSecondary = btnSecondary.cloneNode(true);
+      btnPrimary.parentNode.replaceChild(newBtnPrimary, btnPrimary);
+      btnSecondary.parentNode.replaceChild(newBtnSecondary, btnSecondary);
+
+      if (type === 'blocked-notice') {
+        document.getElementById('prompt-title').textContent = `${permName} Access Blocked`;
+        document.getElementById('prompt-desc').textContent = `Click top-left Lock icon or click Enable below to allow ${permName.toLowerCase()}.`;
+        newBtnPrimary.textContent = 'Enable';
+        newBtnSecondary.textContent = 'Dismiss';
+
+        newBtnPrimary.addEventListener('click', () => {
+          ipcRenderer.send('permission-prompt-response', { id, decision: 'enable-and-reload', domain, permission });
+        });
+        newBtnSecondary.addEventListener('click', () => {
+          ipcRenderer.send('permission-prompt-response', { id, decision: 'dismiss' });
+        });
+
+        setTimeout(() => {
+          ipcRenderer.send('permission-prompt-response', { id, decision: 'dismiss' });
+        }, 7000);
+      } else {
+        document.getElementById('prompt-title').textContent = `${domain} wants permission`;
+        document.getElementById('prompt-desc').textContent = `Use your ${permName.toLowerCase()}`;
+        newBtnPrimary.textContent = 'Allow';
+        newBtnSecondary.textContent = 'Block';
+
+        newBtnPrimary.addEventListener('click', () => {
+          ipcRenderer.send('permission-prompt-response', { id, decision: true, domain, permission });
+        });
+        newBtnSecondary.addEventListener('click', () => {
+          ipcRenderer.send('permission-prompt-response', { id, decision: false, domain, permission });
+        });
+      }
+    });
+  </script>
+</body>
+</html>

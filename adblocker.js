@@ -76,6 +76,20 @@ function isBlocked(urlString) {
     if (url.protocol === 'chrome-extension:' || url.protocol === 'devtools:' || url.protocol === 'file:') {
       return false;
     }
+
+    // Never block any first-party Google or gstatic resources to avoid breaking page functionality
+    const isGoogle = (url.hostname.includes('google') || url.hostname.includes('gstatic')) && 
+                     !url.hostname.includes('googleads') && 
+                     !url.hostname.includes('doubleclick');
+    
+    if (isGoogle) {
+      return false;
+    }
+
+    // Never block M-Lab speed test domains
+    if (url.hostname.endsWith('measurementlab.net') || url.hostname.includes('measurementlab')) {
+      return false;
+    }
     
     // Check hostname
     if (isDomainBlocked(url.hostname)) {

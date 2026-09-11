@@ -1,7 +1,49 @@
 const { app, BrowserWindow, WebContentsView, ipcMain, session, Menu, MenuItem } = require('electron');
+app.name = 'Vayu';
 const path = require('path');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
+
+// Global error handlers to capture main process crashes/exceptions
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION IN MAIN PROCESS:', err);
+  try {
+    const logPath = path.join(app.getPath('userData'), 'orbit-error.log');
+    fs.appendFileSync(logPath, `[UNCAUGHT EXCEPTION - ${new Date().toISOString()}] ${err.stack}\n`);
+  } catch (e) {}
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION IN MAIN PROCESS:', reason);
+  try {
+    const logPath = path.join(app.getPath('userData'), 'orbit-error.log');
+    fs.appendFileSync(logPath, `[UNHANDLED REJECTION - ${new Date().toISOString()}] ${reason.stack || reason}\n`);
+  } catch (e) {}
+});
+
 const adblocker = require('./adblocker');
+
+// Load custom widget promo banner background and logo
+let vayuWidgetBase64 = '';
+let vayuLogoBase64 = '';
+try {
+  const imagePath = path.join(__dirname, 'vayu_widget.jpg');
+  if (fs.existsSync(imagePath)) {
+    const fileBuffer = fs.readFileSync(imagePath);
+    vayuWidgetBase64 = `data:image/jpeg;base64,${fileBuffer.toString('base64')}`;
+  }
+} catch (e) {
+  console.error('Failed to load vayu_widget.jpg:', e);
+}
+try {
+  const logoPath = path.join(__dirname, 'vayu_logo.png');
+  if (fs.existsSync(logoPath)) {
+    const fileBuffer = fs.readFileSync(logoPath);
+    vayuLogoBase64 = `data:image/png;base64,${fileBuffer.toString('base64')}`;
+  }
+} catch (e) {
+  console.error('Failed to load vayu_logo.png:', e);
+}
 
 // State
 let mainWindow;
@@ -29,7 +71,9 @@ let db = {
   },
   stats: {
     totalBlocked: 0
-  }
+  },
+  permissions: {},
+  passwords: []
 };
 
 let dbDirty = false;
@@ -40,12 +84,30 @@ function loadDb() {
     if (fs.existsSync(dbPath)) {
       const data = fs.readFileSync(dbPath, 'utf8');
       db = JSON.parse(data);
-      // Ensure arrays/objects exist
-      if (!Array.isArray(db.history)) db.history = [];
-      if (!Array.isArray(db.bookmarks)) db.bookmarks = [];
-      if (!Array.isArray(db.downloads)) db.downloads = [];
+      // Ensure arrays/objects exist and are sanitized
+      if (!Array.isArray(db.history)) {
+        db.history = [];
+      } else {
+        db.history = db.history.filter(item => item && typeof item === 'object' && typeof item.url === 'string');
+      }
+      if (!Array.isArray(db.bookmarks)) {
+        db.bookmarks = [];
+      } else {
+        db.bookmarks = db.bookmarks.filter(item => item && typeof item === 'object' && typeof item.url === 'string');
+      }
+      if (!Array.isArray(db.downloads)) {
+        db.downloads = [];
+      } else {
+        db.downloads = db.downloads.filter(item => item && typeof item === 'object' && typeof item.id === 'string');
+      }
+      if (!Array.isArray(db.passwords)) {
+        db.passwords = [];
+      } else {
+        db.passwords = db.passwords.filter(item => item && typeof item === 'object' && typeof item.url === 'string');
+      }
       if (!db.settings) db.settings = { adBlockEnabled: true, homepage: 'orbit://newtab' };
       if (!db.stats) db.stats = { totalBlocked: 0 };
+      if (!db.permissions) db.permissions = {};
     }
   } catch (err) {
     console.error('Failed to load browser data database', err);
@@ -60,6 +122,63 @@ function saveDb() {
   } catch (err) {
     console.error('Failed to save browser data database', err);
   }
+}
+
+function queryRegistryDword(registryKey, valueName) {
+  try {
+    const output = execFileSync('reg', ['query', registryKey, '/v', valueName], {
+      encoding: 'utf8',
+      windowsHide: true
+    });
+
+    const line = output.split(/\r?\n/).find((entry) => entry.includes(valueName) && entry.includes('REG_DWORD'));
+    if (!line) return null;
+
+    const match = line.match(/REG_DWORD\s+0x([0-9a-fA-F]+)/);
+    if (!match) return null;
+
+    return parseInt(match[1], 16);
+  } catch (err) {
+    return null;
+  }
+}
+
+function writeRegistryDword(registryKey, valueName, value) {
+  try {
+    execFileSync('reg', ['add', registryKey, '/v', valueName, '/t', 'REG_DWORD', '/d', String(value), '/f'], {
+      encoding: 'utf8',
+      windowsHide: true
+    });
+  } catch (err) {
+    console.error(`Failed writing registry value ${valueName}:`, err);
+  }
+}
+
+function applyInstallerPreferencesOnce() {
+  if (process.platform !== 'win32') return;
+
+  const registryKey = 'HKCU\\Software\\Vayu';
+  const importedFlag = queryRegistryDword(registryKey, 'InstallerPrefsImported');
+  if (importedFlag === 1) return;
+
+  const installedFlag = queryRegistryDword(registryKey, 'Installed');
+  if (installedFlag !== 1) return;
+
+  const shieldPreference = queryRegistryDword(registryKey, 'EnablePrivacyShield');
+  if (shieldPreference !== null) {
+    db.settings.adBlockEnabled = shieldPreference === 1;
+  }
+
+  const setAsDefaultPreference = queryRegistryDword(registryKey, 'SetAsDefaultBrowser');
+  if (setAsDefaultPreference !== null) {
+    db.settings.setAsDefaultBrowserRequested = setAsDefaultPreference === 1;
+  }
+
+  db.settings.installerPrefsImported = true;
+  dbDirty = true;
+  saveDb();
+
+  writeRegistryDword(registryKey, 'InstallerPrefsImported', 1);
 }
 
 // Auto-save database periodically if dirty
@@ -210,192 +329,260 @@ function showPrintPreview(targetWebContents) {
     });
 }
 
+let customContextMenuWin = null;
+const sarvamContextMenuCache = new Map();
+
+function getLocalHeuristicFeatures(params) {
+  const features = ['copy', 'print', 'qr_code', 'translate', 'view_source', 'inspect'];
+  if (params.linkURL) {
+    features.push('link_options');
+  }
+  if (params.mediaType === 'image' || params.srcURL) {
+    features.push('save_image');
+  }
+  return features;
+}
+
+function getSarvamContextMenuFeatures(params, webContents) {
+  const url = webContents.getURL() || '';
+  let domain = 'vayu.in';
+  try { domain = new URL(url).hostname; } catch(e) {}
+
+  const cacheKey = `${domain}_${params.mediaType}_${!!params.selectionText}_${!!params.linkURL}_${params.isEditable}`;
+  if (sarvamContextMenuCache.has(cacheKey)) {
+    return Promise.resolve(sarvamContextMenuCache.get(cacheKey));
+  }
+
+  // Fast local default fallback - instantly resolve to eliminate lag
+  const fastFeatures = getLocalHeuristicFeatures(params);
+
+  // Trigger API update in the background for future clicks (non-blocking)
+  fetch('https://api.sarvam.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-subscription-key': SARVAM_API_KEY,
+      'Authorization': `Bearer ${SARVAM_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'sarvam-105b',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are the right-click context menu AI filter for Vayu Browser. Based on page URL, media type, selection text, link, and editable state, select which context menu options should be shown to give the cleanest user experience. Choose strictly a subset from: ["copy", "link_options", "save_image", "print", "qr_code", "translate", "view_source", "inspect"]. Respond ONLY with valid JSON array of strings.'
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            domain,
+            url,
+            mediaType: params.mediaType,
+            hasSelection: !!params.selectionText,
+            selectionSnippet: params.selectionText ? params.selectionText.substring(0, 100) : '',
+            hasLink: !!params.linkURL,
+            isEditable: params.isEditable
+          })
+        }
+      ],
+      temperature: 0.1
+    })
+  }).then(res => res.json()).then(data => {
+    if (data && data.choices && data.choices[0] && data.choices[0].message) {
+      const text = data.choices[0].message.content.trim();
+      const match = text.match(/\[.*?\]/s);
+      if (match) {
+        const array = JSON.parse(match[0]);
+        if (Array.isArray(array) && array.length > 0) {
+          sarvamContextMenuCache.set(cacheKey, array);
+        }
+      }
+    }
+  }).catch(() => {});
+
+  return Promise.resolve(fastFeatures);
+}
+
 function setupContextMenu(webContents) {
   webContents.on('context-menu', (event, params) => {
-    const menu = new Menu();
-    let hasMediaOrSelection = false;
+    event.preventDefault();
 
-    // 1. Text Selection Copy (for non-editable elements)
-    if (!params.isEditable && params.selectionText && params.selectionText.trim() !== '') {
-      menu.append(new MenuItem({
-        label: 'Copy',
-        role: 'copy'
-      }));
-      hasMediaOrSelection = true;
+    if (customContextMenuWin && !customContextMenuWin.isDestroyed()) {
+      try { customContextMenuWin.close(); } catch(e) {}
     }
 
-    // 2. Link Options
-    if (params.linkURL) {
-      menu.append(new MenuItem({
-        label: 'Copy link address',
-        click: () => {
-          const { clipboard } = require('electron');
-          clipboard.writeText(params.linkURL);
-        }
-      }));
-      menu.append(new MenuItem({
-        label: 'Save link as...',
-        click: () => {
-          webContents.downloadURL(params.linkURL);
-        }
-      }));
-      hasMediaOrSelection = true;
+    const { screen } = require('electron');
+    const cursor = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursor);
+    const workArea = display.workArea;
+
+    const winW = 240;
+    const winH = 340;
+
+    let x = cursor.x;
+    let y = cursor.y;
+
+    if (x + winW > workArea.x + workArea.width) {
+      x = cursor.x - winW;
+      if (x < workArea.x) {
+        x = workArea.x;
+      }
     }
 
-    // 3. Image Options
-    if (params.mediaType === 'image' || (params.srcURL && params.mediaType !== 'none')) {
-      if (hasMediaOrSelection) {
-        menu.append(new MenuItem({ type: 'separator' }));
+    if (y + winH > workArea.y + workArea.height) {
+      y = cursor.y - winH;
+      if (y < workArea.y) {
+        y = workArea.y;
       }
-      menu.append(new MenuItem({
-        label: 'Copy image',
-        click: () => {
-          webContents.copyImageAt(params.x, params.y);
-        }
-      }));
-      menu.append(new MenuItem({
-        label: 'Copy image address',
-        click: () => {
-          const { clipboard } = require('electron');
-          clipboard.writeText(params.srcURL);
-        }
-      }));
-      menu.append(new MenuItem({
-        label: 'Save the image',
-        click: () => {
-          webContents.downloadURL(params.srcURL);
-        }
-      }));
-      hasMediaOrSelection = true;
     }
 
-    if (hasMediaOrSelection) {
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
+    customContextMenuWin = new BrowserWindow({
+      width: winW,
+      height: winH,
+      x: x,
+      y: y,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      parent: mainWindow,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
 
-    // 4. Editable Text Tools (like Chrome)
-    if (params.isEditable) {
-      menu.append(new MenuItem({
-        label: 'Cut',
-        role: 'cut',
-        enabled: params.editFlags.canCut
-      }));
-      menu.append(new MenuItem({
-        label: 'Copy',
-        role: 'copy',
-        enabled: params.editFlags.canCopy
-      }));
-      menu.append(new MenuItem({
-        label: 'Paste',
-        role: 'paste',
-        enabled: params.editFlags.canPaste
-      }));
-      menu.append(new MenuItem({
-        label: 'Select All',
-        role: 'selectall'
-      }));
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
+    let domain = 'vayu.in';
+    try { domain = new URL(webContents.getURL()).hostname; } catch(e) {}
 
-    // 5. Standard navigation options (Back, Forward, Reload)
-    menu.append(new MenuItem({
-      label: 'Back',
-      accelerator: 'Alt+Left',
-      enabled: webContents.canGoBack(),
-      click: () => webContents.goBack()
-    }));
-    menu.append(new MenuItem({
-      label: 'Forward',
-      accelerator: 'Alt+Right',
-      enabled: webContents.canGoForward(),
-      click: () => webContents.goForward()
-    }));
-    menu.append(new MenuItem({
-      label: 'Reload',
-      accelerator: 'CmdOrCtrl+R',
-      click: () => webContents.reload()
-    }));
-    
-    menu.append(new MenuItem({ type: 'separator' }));
-    
-    // Page-level "Save as..." is removed from here
-    
-    menu.append(new MenuItem({
-      label: 'Print...',
-      accelerator: 'CmdOrCtrl+P',
-      click: () => {
-        showPrintPreview(webContents);
+    const cacheKey = `${domain}_${params.mediaType}_${!!params.selectionText}_${!!params.linkURL}_${params.isEditable}`;
+    const cachedAllowed = sarvamContextMenuCache.get(cacheKey) || null;
+
+    customContextMenuWin.loadFile('context-menu.html', {
+      query: {
+        params: encodeURIComponent(JSON.stringify(params)),
+        allowed: cachedAllowed ? encodeURIComponent(JSON.stringify(cachedAllowed)) : ''
       }
-    }));
-    menu.append(new MenuItem({
-      label: 'Cast...',
-      enabled: false
-    }));
-    
-    menu.append(new MenuItem({ type: 'separator' }));
-    
-    menu.append(new MenuItem({
-      label: 'Create QR Code for this page',
-      click: () => {
-        const url = webContents.getURL();
-        if (qrWindow && !qrWindow.isDestroyed()) {
-          qrWindow.focus();
-          return;
-        }
-        qrWindow = new BrowserWindow({
-          width: 360,
-          height: 460,
-          frame: false,
-          transparent: true,
-          resizable: false,
-          minimizable: false,
-          parent: mainWindow,
-          modal: true,
-          webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
-            nodeIntegration: false,
-            contextIsolation: true
-          }
-        });
-        qrWindow.loadFile(path.join(__dirname, 'qr.html'), { query: { url } });
-        qrWindow.on('closed', () => {
-          qrWindow = null;
-        });
+    });
+
+    customContextMenuWin.on('blur', () => {
+      if (customContextMenuWin && !customContextMenuWin.isDestroyed()) {
+        customContextMenuWin.close();
       }
-    }));
-    
-    menu.append(new MenuItem({ type: 'separator' }));
-    
-    menu.append(new MenuItem({
-      label: 'Translate to English',
-      click: () => {
-        const url = webContents.getURL();
-        webContents.loadURL(`https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(url)}`);
+    });
+
+    customContextMenuWin.on('closed', () => {
+      customContextMenuWin = null;
+    });
+
+    // Asynchronously call Sarvam AI to filter & show items (or update menu from skeleton loader)
+    getSarvamContextMenuFeatures(params, webContents).then(allowedFeatures => {
+      if (customContextMenuWin && !customContextMenuWin.isDestroyed()) {
+        customContextMenuWin.webContents.send('sarvam-contextmenu-resolved', allowedFeatures);
       }
-    }));
-    
-    menu.append(new MenuItem({ type: 'separator' }));
-    
-    menu.append(new MenuItem({
-      label: 'View page source',
-      accelerator: 'CmdOrCtrl+U',
-      click: () => {
-        const url = webContents.getURL();
-        if (mainWindow) {
-          mainWindow.webContents.send('tab-created-external', { url: `view-source:${url}` });
-        }
-      }
-    }));
-    menu.append(new MenuItem({
-      label: 'Inspect',
-      click: () => {
-        webContents.inspectElement(params.x, params.y);
-      }
-    }));
-    
-    menu.popup();
+    });
   });
 }
+
+ipcMain.on('context-menu-action', (event, data) => {
+  if (customContextMenuWin && !customContextMenuWin.isDestroyed()) {
+    customContextMenuWin.close();
+  }
+
+  const activeTab = tabs.get(activeTabId);
+  const targetWebContents = (activeTab && activeTab.view && activeTab.view.webContents) ? activeTab.view.webContents : mainWindow.webContents;
+  const { action, params } = data;
+
+  switch (action) {
+    case 'copy':
+      if (params.selectionText) {
+        const { clipboard } = require('electron');
+        clipboard.writeText(params.selectionText);
+      } else {
+        targetWebContents.copy();
+      }
+      break;
+    case 'cut':
+      targetWebContents.cut();
+      break;
+    case 'paste':
+      targetWebContents.paste();
+      break;
+    case 'select_all':
+      targetWebContents.selectAll();
+      break;
+    case 'copy_link':
+      if (params.linkURL) {
+        const { clipboard } = require('electron');
+        clipboard.writeText(params.linkURL);
+      }
+      break;
+    case 'save_link':
+      if (params.linkURL) targetWebContents.downloadURL(params.linkURL);
+      break;
+    case 'copy_image':
+      targetWebContents.copyImageAt(params.x, params.y);
+      break;
+    case 'copy_image_addr':
+      if (params.srcURL) {
+        const { clipboard } = require('electron');
+        clipboard.writeText(params.srcURL);
+      }
+      break;
+    case 'save_image':
+      if (params.srcURL) targetWebContents.downloadURL(params.srcURL);
+      break;
+    case 'back':
+      if (targetWebContents.canGoBack()) targetWebContents.goBack();
+      break;
+    case 'forward':
+      if (targetWebContents.canGoForward()) targetWebContents.goForward();
+      break;
+    case 'reload':
+      targetWebContents.reload();
+      break;
+    case 'print':
+      showPrintPreview(targetWebContents);
+      break;
+    case 'qr':
+      const url = targetWebContents.getURL();
+      if (qrWindow && !qrWindow.isDestroyed()) {
+        qrWindow.focus();
+        return;
+      }
+      qrWindow = new BrowserWindow({
+        width: 360,
+        height: 460,
+        frame: false,
+        transparent: true,
+        resizable: false,
+        minimizable: false,
+        parent: mainWindow,
+        modal: true,
+        webPreferences: {
+          preload: path.join(__dirname, 'preload.js'),
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      qrWindow.loadFile(path.join(__dirname, 'qr.html'), { query: { url } });
+      qrWindow.on('closed', () => { qrWindow = null; });
+      break;
+    case 'translate':
+      const targetUrl = targetWebContents.getURL();
+      targetWebContents.loadURL(`https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(targetUrl)}`);
+      break;
+    case 'view_source':
+      const srcUrl = targetWebContents.getURL();
+      if (mainWindow) {
+        mainWindow.webContents.send('tab-created-external', { url: `view-source:${srcUrl}` });
+      }
+      break;
+    case 'inspect':
+      targetWebContents.inspectElement(params.x, params.y);
+      break;
+  }
+});
 
 function applyReaderMode(tab) {
   const webContents = tab.view.webContents;
@@ -1227,12 +1414,63 @@ function removeImmersiveUi(tab) {
 
 function registerDownloadHandler(sess, isIncognito) {
   sess.on('will-download', (event, item, webContents) => {
+    const filename = item.getFilename();
+    const url = item.getURL();
+
+    // Check with Sarvam AI or local fast heuristic if the user is downloading another browser
+    const lowercaseFn = filename.toLowerCase();
+    const lowercaseUrl = url.toLowerCase();
+    const isBrowserDownloadLocal = 
+      lowercaseFn.includes('chrome') || lowercaseFn.includes('firefox') || 
+      lowercaseFn.includes('opera') || lowercaseFn.includes('brave') || 
+      lowercaseFn.includes('safari') || lowercaseFn.includes('edge') || 
+      lowercaseUrl.includes('chrome') || lowercaseUrl.includes('firefox') || 
+      lowercaseUrl.includes('opera') || lowercaseUrl.includes('brave') || 
+      lowercaseUrl.includes('edge');
+
+    if (isBrowserDownloadLocal) {
+      showLockPointerTooltip('Optimized for you', 'Vayu Browser is already optimized for you. Why switch?');
+    }
+
+    // Call Sarvam AI in parallel for deeper detection
+    fetch('https://api.sarvam.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-subscription-key': SARVAM_API_KEY,
+        'Authorization': `Bearer ${SARVAM_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'sarvam-105b',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are the security brain of Vayu Browser. Determine if the given filename or URL is a web browser installation package or setup (e.g. Chrome, Firefox, Opera, Brave, Edge, Safari, Vivaldi, etc.). Respond strictly with a JSON object: {"isBrowser": true} or {"isBrowser": false}.'
+          },
+          {
+            role: 'user',
+            content: `Filename: ${filename}, URL: ${url}`
+          }
+        ],
+        temperature: 0.1
+      })
+    }).then(res => res.json()).then(data => {
+      if (data && data.choices && data.choices[0] && data.choices[0].message) {
+        const text = data.choices[0].message.content.trim();
+        const match = text.match(/\{.*?\}/s);
+        if (match) {
+          const result = JSON.parse(match[0]);
+          if (result && result.isBrowser === true) {
+            showLockPointerTooltip('Optimized for you', 'Vayu Browser is already optimized for you. Why switch?');
+          }
+        }
+      }
+    }).catch(() => {});
+
     const downloadId = 'dl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
     activeDownloads.set(downloadId, item);
 
-    const filename = item.getFilename();
     const totalBytes = item.getTotalBytes();
-    const url = item.getURL();
     const date = new Date().toISOString();
 
     const downloadState = {
@@ -1316,12 +1554,18 @@ function registerDownloadHandler(sess, isIncognito) {
 function createWindow() {
   // Load settings & init adblocker
   loadDb();
+  applyInstallerPreferencesOnce();
   adblocker.init();
   
   // Setup default session adblocker
   setupAdBlocker(session.defaultSession);
   // Setup incognito session adblocker
   setupAdBlocker(session.fromPartition('incognito'));
+
+  // Set standard Chrome user agent to prevent Google Meet blocks
+  const chromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  session.defaultSession.setUserAgent(chromeUserAgent);
+  session.fromPartition('incognito').setUserAgent(chromeUserAgent);
 
   // Cleanup old print preview files from userData directory
   try {
@@ -1340,6 +1584,140 @@ function createWindow() {
   registerDownloadHandler(session.defaultSession, false);
   registerDownloadHandler(session.fromPartition('incognito'), true);
 
+  let lockPointerWin = null;
+  let lastLockPointerTime = 0;
+
+  function showLockPointerTooltip(title, desc) {
+    const now = Date.now();
+    if (now - lastLockPointerTime < 4000) return;
+    lastLockPointerTime = now;
+
+    if (lockPointerWin && !lockPointerWin.isDestroyed()) {
+      try { lockPointerWin.close(); } catch(e) {}
+    }
+
+    if (locationNotificationWin && !locationNotificationWin.isDestroyed()) {
+      return;
+    }
+
+    const winBounds = mainWindow.getBounds();
+    const winW = 310;
+    const winH = 85;
+    
+    const x = winBounds.x + 135;
+    const y = winBounds.y + 78;
+
+    lockPointerWin = new BrowserWindow({
+      width: winW,
+      height: winH,
+      x: Math.round(x),
+      y: Math.round(y),
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      parent: mainWindow,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+
+    lockPointerWin.loadFile('lock-pointer-tooltip.html', {
+      query: { title, desc }
+    });
+
+    lockPointerWin.on('blur', () => {
+      if (lockPointerWin && !lockPointerWin.isDestroyed()) {
+        lockPointerWin.close();
+      }
+    });
+
+    setTimeout(() => {
+      if (lockPointerWin && !lockPointerWin.isDestroyed()) {
+        try { lockPointerWin.close(); } catch(e) {}
+      }
+    }, 6000);
+  }
+
+  let lastNoticeTime = 0;
+  function triggerLocationPopup(url) {
+    const now = Date.now();
+    if ((!locationNotificationWin || locationNotificationWin.isDestroyed()) && (now - lastNoticeTime > 4000)) {
+      lastNoticeTime = now;
+      showLocationNotification(url);
+    }
+  }
+
+  const handlePermissionRequest = (webContents, permission, callback, details) => {
+    const url = webContents.getURL();
+    try {
+      const domain = new URL(url).hostname;
+      let mapped = permission;
+      if (permission === 'geolocation') mapped = 'location';
+      else if (permission === 'audio') mapped = 'microphone';
+      else if (permission === 'video') mapped = 'camera';
+
+      if (db.permissions && db.permissions[domain] && db.permissions[domain][mapped] !== undefined) {
+        if (db.permissions[domain][mapped] === false) {
+          showLockPointerTooltip('Click Lock Icon Here', `Enable ${mapped} for ${domain}`);
+        }
+        callback(db.permissions[domain][mapped]);
+        return;
+      }
+    } catch (e) {}
+    callback(true);
+  };
+
+  const handlePermissionCheck = (webContents, permission, requestingOrigin, details) => {
+    try {
+      const domain = new URL(requestingOrigin).hostname;
+      if (db.permissions && db.permissions[domain]) {
+        const perms = db.permissions[domain];
+        
+        if (permission === 'geolocation') {
+          if (perms.location === false) {
+            showLockPointerTooltip('Click Lock Icon Here', `Enable location for ${domain}`);
+            return false;
+          }
+        }
+        
+        if (permission === 'media') {
+          const mediaType = details && details.mediaType;
+          if (mediaType === 'video' && perms.camera === false) {
+            showLockPointerTooltip('Click Lock Icon Here', `Enable camera for ${domain}`);
+            return false;
+          }
+          if (mediaType === 'audio' && perms.microphone === false) {
+            showLockPointerTooltip('Click Lock Icon Here', `Enable microphone for ${domain}`);
+            return false;
+          }
+          if (perms.camera === false || perms.microphone === false) {
+            showLockPointerTooltip('Click Lock Icon Here', `Enable permissions for ${domain}`);
+            return false;
+          }
+        }
+        
+        let mapped = permission;
+        if (permission === 'audio') mapped = 'microphone';
+        else if (permission === 'video') mapped = 'camera';
+        
+        if (perms[mapped] === false) {
+          showLockPointerTooltip('Click Lock Icon Here', `Enable ${mapped} for ${domain}`);
+          return false;
+        }
+      }
+    } catch (e) {}
+    return true;
+  };
+
+  session.defaultSession.setPermissionRequestHandler(handlePermissionRequest);
+  session.fromPartition('incognito').setPermissionRequestHandler(handlePermissionRequest);
+
+  session.defaultSession.setPermissionCheckHandler(handlePermissionCheck);
+  session.fromPartition('incognito').setPermissionCheckHandler(handlePermissionCheck);
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -1347,6 +1725,7 @@ function createWindow() {
     minHeight: 600,
     frame: false, // Frameless for custom header/tabs UI
     titleBarStyle: 'hidden',
+    icon: path.join(__dirname, 'vayu_app_logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -1471,6 +1850,176 @@ function showShieldPopup(rect) {
   });
 }
 
+const SARVAM_API_KEY = 'sk_b5ycfgx0_CuJBNw0kCZV0QF2pvRkV8N9H';
+const sarvamBrainCache = new Map();
+
+function getLocalFastRecommendations(domain) {
+  const d = domain.toLowerCase();
+  if (d.includes('meet') || d.includes('zoom') || d.includes('teams') || d.includes('whereby')) return ['camera', 'microphone'];
+  if (d.includes('map') || d.includes('earth') || d.includes('gps')) return ['location'];
+  if (d.includes('github') || d.includes('drive') || d.includes('dropbox')) return ['downloads', 'clipboard'];
+  if (d.includes('youtube') || d.includes('netflix') || d.includes('spotify')) return ['downloads'];
+  return ['location', 'downloads', 'clipboard', 'camera', 'microphone'];
+}
+
+function fetchSarvamAiRecommendations(domain) {
+  if (sarvamBrainCache.has(domain)) {
+    return sarvamBrainCache.get(domain);
+  }
+
+  const fastFallback = getLocalFastRecommendations(domain);
+  sarvamBrainCache.set(domain, fastFallback);
+
+  // Non-blocking async fetch to Sarvam AI to refine recommendation
+  fetch('https://api.sarvam.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-subscription-key': SARVAM_API_KEY,
+      'Authorization': `Bearer ${SARVAM_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'sarvam-105b',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are the intelligent feature filter brain of Vayu Browser. Given a domain, analyze and determine which permission features are necessary for the user to see. Choose ONLY from: ["location", "camera", "microphone", "clipboard", "downloads"]. Respond ONLY with valid JSON array of strings, e.g. ["camera", "microphone"].'
+        },
+        {
+          role: 'user',
+          content: `Domain: ${domain}`
+        }
+      ],
+      temperature: 0.1
+    })
+  }).then(res => res.json()).then(data => {
+    if (data && data.choices && data.choices[0] && data.choices[0].message) {
+      const text = data.choices[0].message.content.trim();
+      const match = text.match(/\[.*?\]/s);
+      if (match) {
+        const array = JSON.parse(match[0]);
+        if (Array.isArray(array) && array.length > 0) {
+          sarvamBrainCache.set(domain, array);
+          if (locationNotificationWin && !locationNotificationWin.isDestroyed()) {
+            locationNotificationWin.webContents.send('sarvam-update', array);
+          }
+        }
+      }
+    }
+  }).catch(err => {});
+
+  return fastFallback;
+}
+
+let locationNotificationWin = null;
+
+function showLocationNotification(url) {
+  if (locationNotificationWin && !locationNotificationWin.isDestroyed()) {
+    try { locationNotificationWin.close(); } catch(e) {}
+  }
+
+  let domain = 'vayu.in';
+  try {
+    const urlObj = new URL(url);
+    domain = urlObj.hostname;
+  } catch(e) {}
+
+  const winBounds = mainWindow.getBounds();
+  const winW = 380;
+  const winH = 560;
+  
+  // Position it to drop down from the shield/URL bar area
+  const x = winBounds.x + 175;
+  const y = winBounds.y + 48;
+
+  locationNotificationWin = new BrowserWindow({
+    width: winW,
+    height: winH,
+    x: Math.round(x),
+    y: Math.round(y),
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    parent: mainWindow, // Make it a child of main window
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  const permissions = (db.permissions && db.permissions[domain]) || { location: true, downloads: true, clipboard: true, camera: true, microphone: true };
+  const relevantOptions = fetchSarvamAiRecommendations(domain);
+
+  locationNotificationWin.loadFile('location-notification.html', {
+    query: {
+      domain,
+      location: permissions.location !== false ? 'true' : 'false',
+      downloads: permissions.downloads !== false ? 'true' : 'false',
+      clipboard: permissions.clipboard !== false ? 'true' : 'false',
+      camera: permissions.camera !== false ? 'true' : 'false',
+      microphone: permissions.microphone !== false ? 'true' : 'false',
+      relevant: JSON.stringify(relevantOptions)
+    }
+  });
+
+  locationNotificationWin.on('blur', () => {
+    if (locationNotificationWin && !locationNotificationWin.isDestroyed()) {
+      locationNotificationWin.close();
+    }
+  });
+
+  locationNotificationWin.on('closed', () => {
+    locationNotificationWin = null;
+  });
+}
+
+let feedbackPopup = null;
+
+function showFeedbackPopup(rect) {
+  if (feedbackPopup && !feedbackPopup.isDestroyed()) {
+    try { feedbackPopup.close(); } catch(e) {}
+    feedbackPopup = null;
+    return;
+  }
+
+  const winBounds = mainWindow.getBounds();
+  
+  // Position it right below the feedback profile button on the top right
+  const popupX = winBounds.x + rect.left - 290;
+  const popupY = winBounds.y + rect.bottom + 5; 
+
+  feedbackPopup = new BrowserWindow({
+    width: 320,
+    height: 350,
+    x: Math.round(popupX),
+    y: Math.round(popupY),
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    parent: mainWindow,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  feedbackPopup.loadFile('feedback-popup.html');
+
+  feedbackPopup.on('blur', () => {
+    if (feedbackPopup && !feedbackPopup.isDestroyed()) {
+      feedbackPopup.close();
+    }
+  });
+
+  feedbackPopup.on('closed', () => {
+    feedbackPopup = null;
+  });
+}
+
 function getTargetHeaderHeight() {
   if (isImmersiveMode) {
     return 0;
@@ -1575,7 +2124,8 @@ function createTab(tabId, url, isIncognito = false) {
       session: sess,
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
+      sandbox: true,
+      preload: path.join(__dirname, 'preload-tab.js')
     }
   });
 
@@ -1754,14 +2304,506 @@ function createTab(tabId, url, isIncognito = false) {
     }
   });
 
-  view.webContents.on('did-finish-load', () => {
+  const handlePageLoadOrNavigation = () => {
     try {
-      fs.appendFileSync('c:\\Users\\pouru\\OneDrive\\Desktop\\Project\\browser\\orbit-error.log', `did-finish-load: url=${view.webContents.getURL()}, isImmersiveMode=${isImmersiveMode}\n`);
+      fs.appendFileSync('c:\\Users\\pouru\\OneDrive\\Desktop\\Project\\browser\\orbit-error.log', `did-finish-load/did-navigate-in-page: url=${view.webContents.getURL()}, isImmersiveMode=${isImmersiveMode}\n`);
     } catch (e) {}
+
+    // Inject Vayu Lock Icon replacement for website permission dialogs (e.g. Google Meet)
+    const lockIconInjectScript = `
+      (() => {
+        function replaceTuneWithVayuLock() {
+          const dialogs = document.querySelectorAll('[role="dialog"], div');
+          dialogs.forEach(d => {
+            if (d.textContent && (d.textContent.includes('blocked from using') || d.textContent.includes('page info icon'))) {
+              const svgs = d.querySelectorAll('svg');
+              svgs.forEach(svg => {
+                if (!svg.getAttribute('data-vayu-lock')) {
+                  svg.setAttribute('data-vayu-lock', 'true');
+                  svg.outerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2d6a4f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin:0 4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+                }
+              });
+            }
+          });
+        }
+        try {
+          replaceTuneWithVayuLock();
+          const obs = new MutationObserver(() => replaceTuneWithVayuLock());
+          if (document.body) obs.observe(document.body, { childList: true, subtree: true });
+        } catch(e) {}
+      })();
+    `;
+    view.webContents.executeJavaScript(lockIconInjectScript).catch(() => {});
+    
+    // Inject script to hide Google Speed Test widget
+    const currentUrl = view.webContents.getURL();
+    if (currentUrl.includes('google.com/search') || currentUrl.includes('google.co.in/search') || currentUrl.includes('bing.com/search') || currentUrl.includes('search.yahoo.com/search') || currentUrl.includes('qmamu.com')) {
+      const hideCode = `
+        (() => {
+          const hideGoogleWidgets = () => {
+            // Hide Google Speed Test
+            const cards = document.querySelectorAll('g-card, div.g, div.obg-card, .obg-card');
+            for (const card of cards) {
+              if (card.textContent.includes('Internet speed test') || card.textContent.includes('RUN SPEED TEST')) {
+                card.style.setProperty('display', 'none', 'important');
+              }
+            }
+          };
+          hideGoogleWidgets();
+          const observer = new MutationObserver(hideGoogleWidgets);
+          observer.observe(document.body, { childList: true, subtree: true });
+        })();
+      `;
+      view.webContents.executeJavaScript(hideCode).catch(err => console.error('Failed to inject Google widgets hiding script:', err));
+
+      // Shift Qmamu homepage search elements to the left
+      if (currentUrl.includes('qmamu.com') && !currentUrl.includes('qmamu.com/search')) {
+        const leftAlignCode = `
+          (() => {
+            if (document.getElementById('vayu-left-align-homepage')) return;
+            const style = document.createElement('style');
+            style.id = 'vayu-left-align-homepage';
+            style.textContent = \`
+              .sc-b2a5tv-0, [class*="sc-b2a5tv-0"] {
+                align-items: flex-start !important;
+                padding-left: 8% !important;
+              }
+              .sc-b2a5tv-4, [class*="sc-b2a5tv-4"] {
+                margin: 50px 0 !important;
+              }
+              .sc-b2a5tv-5, [class*="sc-b2a5tv-5"] {
+                margin: 0 !important;
+              }
+            \`;
+            document.head.appendChild(style);
+          })();
+        `;
+        view.webContents.executeJavaScript(leftAlignCode).catch(() => {});
+      }
+
+      // Inject search widgets sidebar on Qmamu search page
+      if (currentUrl.includes('qmamu.com/search')) {
+        const sidebarCode = `
+          (() => {
+            let lastQuery = '';
+            const injectSidebar = async () => {
+              const homeStyle = document.getElementById('vayu-left-align-homepage');
+              if (homeStyle) homeStyle.remove();
+
+              const url = new URL(window.location.href);
+              const q = url.searchParams.get('q') || url.searchParams.get('p') || '';
+              const cleanQ = q.trim();
+
+              if (!window.location.href.includes('qmamu.com/search') || !cleanQ) {
+                const existing = document.getElementById('vayu-search-sidebar');
+                if (existing) existing.remove();
+                const existingResultsStyle = document.getElementById('vayu-left-align-results');
+                if (existingResultsStyle) existingResultsStyle.remove();
+                lastQuery = '';
+                return;
+              }
+              
+              if (!document.getElementById('vayu-left-align-results')) {
+                const resultsStyle = document.createElement('style');
+                resultsStyle.id = 'vayu-left-align-results';
+                resultsStyle.textContent = \`
+                  .sc-7aqnu-1, [class*="sc-7aqnu-"] {
+                    margin-left: 80px !important;
+                    margin-right: auto !important;
+                  }
+                  div:has(> .sc-7aqnu-1), div:has(> [class*="sc-7aqnu-"]) {
+                    justify-content: flex-start !important;
+                  }
+                  html, body {
+                    overflow-x: hidden !important;
+                  }
+                \`;
+                document.head.appendChild(resultsStyle);
+              }
+
+              let sidebar = document.getElementById('vayu-search-sidebar');
+              let shadow;
+              if (!sidebar) {
+                const resultsCol = document.querySelector('.sc-7aqnu-1') || document.querySelector('div[class*="sc-7aqnu-"]') || document.getElementById('search') || document.querySelector('.results');
+                if (!resultsCol) return;
+
+                sidebar = document.createElement('div');
+                sidebar.id = 'vayu-search-sidebar';
+                sidebar.style.cssText = 'position: absolute !important; width: 360px !important; display: flex !important; flex-direction: column !important; gap: 20px !important; box-sizing: border-box !important;';
+                
+                const updatePosition = () => {
+                  const currentResultsCol = document.querySelector('.sc-7aqnu-1') || document.querySelector('div[class*="sc-7aqnu-"]') || document.getElementById('search') || document.querySelector('.results');
+                  if (!currentResultsCol) return;
+                  const rect = currentResultsCol.getBoundingClientRect();
+                  const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+                  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                  sidebar.style.left = (rect.left + rect.width + 95 + scrollLeft) + 'px';
+                  sidebar.style.top = (rect.top + 9 + scrollTop) + 'px';
+                };
+                
+                document.body.appendChild(sidebar);
+                updatePosition();
+                
+                window.addEventListener('resize', updatePosition);
+                window.addEventListener('scroll', updatePosition);
+                
+                shadow = sidebar.attachShadow({ mode: 'open' });
+              } else {
+                shadow = sidebar.shadowRoot;
+              }
+
+              if (lastQuery !== cleanQ) {
+                lastQuery = cleanQ;
+                shadow.innerHTML = '';
+
+                const style = document.createElement('style');
+                style.textContent = \`
+                  .knowledge-panel {
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.70) 0%, rgba(255, 255, 255, 0.60) 100%), url(${vayuWidgetBase64}) no-repeat center / cover !important;
+                    border: none !important;
+                    border-radius: 16px !important;
+                    padding: 20px !important;
+                    box-shadow: rgba(0, 0, 0, 0.12) 0px 1px 3px, rgba(0, 0, 0, 0.24) 0px 1px 2px !important;
+                    font-family: Arial, sans-serif !important;
+                    color: #202124 !important;
+                    box-sizing: border-box !important;
+                    width: 360px !important;
+                    backdrop-filter: blur(8px) !important;
+                    transition: all 0.3s ease !important;
+                  }
+                  .knowledge-panel:hover {
+                    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.30) 0px 3px 6px !important;
+                    transform: translateY(-2px) !important;
+                  }
+                  .header-section {
+                    display: flex !important;
+                    align-items: flex-start !important;
+                    justify-content: space-between !important;
+                    gap: 12px !important;
+                    margin-bottom: 12px !important;
+                  }
+                  .title-area {
+                    flex: 1 !important;
+                  }
+                  .main-title {
+                    font-size: 23px !important;
+                    font-weight: 700 !important;
+                    color: #1b4d3e !important;
+                    margin: 0 0 4px 0 !important;
+                    line-height: 1.25 !important;
+                  }
+                  .subtitle {
+                    font-size: 13px !important;
+                    color: #55585b !important;
+                    line-height: 1.4 !important;
+                  }
+                  .kp-banner-img {
+                    width: 100% !important;
+                    height: 170px !important;
+                    object-fit: cover !important;
+                    border-radius: 10px !important;
+                    margin: 6px 0 12px 0 !important;
+                    border: 1px solid rgba(45, 106, 79, 0.15) !important;
+                    box-shadow: rgba(0, 0, 0, 0.05) 0px 4px 12px !important;
+                  }
+                  .divider {
+                    border-top: 1px solid rgba(45, 106, 79, 0.15) !important;
+                    margin: 12px 0 !important;
+                  }
+                  .extract-text {
+                    font-size: 13.5px !important;
+                    color: #2b2d2f !important;
+                    line-height: 1.6 !important;
+                    margin-bottom: 8px !important;
+                  }
+                  .source-link {
+                    font-size: 12px !important;
+                    color: #55585b !important;
+                  }
+                  .source-link a {
+                    color: #2d6a4f !important;
+                    text-decoration: none !important;
+                    font-weight: 600 !important;
+                  }
+                  .source-link a:hover {
+                    text-decoration: underline !important;
+                  }
+                  .translate-section {
+                    margin-top: 12px !important;
+                  }
+                  .translate-header {
+                    font-size: 12px !important;
+                    color: #2d6a4f !important;
+                    margin-bottom: 6px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 4px !important;
+                  }
+                  .translate-title {
+                    font-weight: 700 !important;
+                  }
+                  .translate-text {
+                    font-size: 13.5px !important;
+                    color: #2b2d2f !important;
+                    line-height: 1.6 !important;
+                  }
+                \`;
+                shadow.appendChild(style);
+
+                let searchTitle = cleanQ.replace(/\\b(download|setup|install|free|latest|version|search|find|how to)\\b/gi, '').trim();
+                if (searchTitle) {
+                  try {
+                    const wikiUrl = \`https://en.wikipedia.org/api/rest_v1/page/summary/\${encodeURIComponent(searchTitle)}\`;
+                    const response = await fetch(wikiUrl);
+                    if (response.ok) {
+                      const data = await response.json();
+                      if (data.type === 'standard' || data.extract) {
+                        let hindiText = '';
+                        try {
+                          const transUrl = \`https://api.mymemory.translated.net/get?q=\${encodeURIComponent(data.extract.slice(0, 450))}&langpair=en|hi\`;
+                          const transRes = await fetch(transUrl);
+                          if (transRes.ok) {
+                            const transData = await transRes.json();
+                            hindiText = transData.responseData.translatedText;
+                          }
+                        } catch (transErr) {}
+                        
+                        const imgSource = data.originalimage ? data.originalimage.source : (data.thumbnail ? data.thumbnail.source : '');
+                        
+                        const kp = document.createElement('div');
+                        kp.className = 'knowledge-panel';
+                        kp.innerHTML = \`
+                          <div class="header-section">
+                            <div class="title-area">
+                              <h2 class="main-title">\${data.title}</h2>
+                              <div class="subtitle">\${data.description || 'Information'}</div>
+                            </div>
+                          </div>
+                          \${imgSource ? \`<img src="\${imgSource}" class="kp-banner-img" />\` : ''}
+                          <div class="divider"></div>
+                          <div class="extract-section">
+                            <div class="extract-text">\${data.extract}</div>
+                            <div class="source-link">Source: <a href="\${data.content_urls.desktop.page}" target="_blank">Wikipedia</a></div>
+                          </div>
+                          \${hindiText ? \`
+                          <div class="divider"></div>
+                          <div class="translate-section">
+                            <div class="translate-header">
+                              <span class="translate-title">Translated by Vayu AI (Hindi)</span>
+                            </div>
+                            <div class="translate-text">\${hindiText}</div>
+                          </div>
+                          \` : ''}
+                        \`;
+                        const existingKp = shadow.querySelector('.knowledge-panel');
+                        if (existingKp) existingKp.remove();
+                        shadow.appendChild(kp);
+                      }
+                    }
+                  } catch (wikiErr) {}
+                }
+              }
+            };
+            injectSidebar();
+            const observer = new MutationObserver(injectSidebar);
+            observer.observe(document.body, { childList: true, subtree: true });
+          })();
+        `;
+        view.webContents.executeJavaScript(sidebarCode).catch(err => console.error('Failed to inject Qmamu search sidebar:', err));
+      }
+
+      // Inject promotional widget banner
+      try {
+        const urlObj = new URL(currentUrl);
+        const query = urlObj.searchParams.get('q') || urlObj.searchParams.get('p') || '';
+        const normalizedQuery = query.toLowerCase().trim();
+        
+        const isSpeed = normalizedQuery.includes('internet speed') || normalizedQuery.includes('speed test');
+        let isBrowserDl = normalizedQuery.includes('download chrome') || 
+                          normalizedQuery.includes('download firefox') || 
+                          normalizedQuery.includes('download edge') || 
+                          normalizedQuery.includes('download opera') || 
+                          normalizedQuery.includes('download brave') || 
+                          normalizedQuery.includes('download safari') || 
+                          (normalizedQuery.includes('download') && normalizedQuery.includes('browser'));
+
+        const renderPromoBanner = () => {
+          const promoCode = `
+            (() => {
+              const injectBanner = () => {
+                const url = new URL(window.location.href);
+                const q = url.searchParams.get('q') || url.searchParams.get('p') || '';
+                const cleanQ = q.trim().toLowerCase();
+                
+                const competitorBrowsers = ['chrome', 'firefox', 'edge', 'opera', 'brave', 'safari', 'vivaldi', 'tor browser', 'internet explorer', 'browser'];
+                const isMatch = competitorBrowsers.some(b => cleanQ.includes(b));
+                
+                if (!cleanQ || !isMatch) {
+                  const existing = document.getElementById('vayu-custom-widget-banner');
+                  if (existing) existing.remove();
+                  return;
+                }
+
+                if (document.getElementById('vayu-custom-widget-banner')) return;
+                const topStuff = document.getElementById('QmamuAll') || document.getElementById('topstuff') || document.getElementById('search') || document.getElementById('b_results') || document.getElementById('web') || document.getElementById('results') || document.getElementById('results-list') || document.querySelector('.results') || document.querySelector('div[class*="sc-meawca-"]') || document.body;
+                if (topStuff) {
+                  const container = document.createElement('div');
+                  container.id = 'vayu-custom-widget-banner';
+                  container.style.cssText = 'width: 100% !important; max-width: 652px !important; margin: 15px auto !important; display: block !important;';
+                  
+                  const shadow = container.attachShadow({ mode: 'open' });
+                  
+                  const style = document.createElement('style');
+                  style.textContent = \`
+                    .banner {
+                      display: flex !important;
+                      align-items: center !important;
+                      justify-content: flex-end !important;
+                      width: 100% !important;
+                      height: 95px !important;
+                      border-radius: 14px !important;
+                      background: url(${vayuWidgetBase64}) no-repeat center / cover !important;
+                      border: 1.5px solid #2d6a4f !important;
+                      box-shadow: rgba(0, 0, 0, 0.12) 0px 1px 3px, rgba(0, 0, 0, 0.24) 0px 1px 2px !important;
+                      position: relative !important;
+                      overflow: hidden !important;
+                      font-family: "Outfit", sans-serif !important;
+                      padding: 0 24px !important;
+                      box-sizing: border-box !important;
+                    }
+                    .banner-content {
+                      display: flex !important;
+                      flex-direction: column !important;
+                      align-items: flex-end !important;
+                      justify-content: center !important;
+                      gap: 6px !important;
+                      text-align: right !important;
+                    }
+                    .text-container {
+                      font-size: 14px !important;
+                      font-weight: 700 !important;
+                      color: #0d1b2a !important;
+                      text-align: right !important;
+                      line-height: 1.3 !important;
+                      white-space: normal !important;
+                    }
+                    .action-button {
+                      background: #2d6a4f !important;
+                      color: white !important;
+                      border: none !important;
+                      border-radius: 20px !important;
+                      padding: 6px 16px !important;
+                      font-size: 11px !important;
+                      font-weight: 700 !important;
+                      cursor: pointer !important;
+                      box-shadow: 0 2px 8px rgba(45, 106, 79, 0.25) !important;
+                      flex-shrink: 0 !important;
+                      height: fit-content !important;
+                      display: inline-block !important;
+                      transition: background-color 0.2s ease, transform 0.1s ease !important;
+                      outline: none !important;
+                      width: fit-content !important;
+                    }
+                    .action-button:hover {
+                      background: #1b4d3e !important;
+                      transform: translateY(-1px) !important;
+                    }
+                    .action-button:active {
+                      transform: translateY(0) !important;
+                    }
+                  \`;
+                  shadow.appendChild(style);
+                  
+                  const banner = document.createElement('div');
+                  banner.className = 'banner';
+                  
+                  const bannerContent = document.createElement('div');
+                  bannerContent.className = 'banner-content';
+                  
+                  const centerText = document.createElement('div');
+                  centerText.className = 'text-container';
+                  centerText.innerText = 'Vayu Browser is already optimized for you. Why switch?';
+                  bannerContent.appendChild(centerText);
+
+                  const btn = document.createElement('button');
+                  btn.className = 'action-button';
+                  btn.innerText = 'Explore Vayu';
+                  btn.onclick = () => {
+                    container.style.display = 'none';
+                  };
+                  bannerContent.appendChild(btn);
+                  
+                  banner.appendChild(bannerContent);
+                  shadow.appendChild(banner);
+                  
+                  if (topStuff === document.body) {
+                    topStuff.insertBefore(container, topStuff.firstChild);
+                  } else {
+                    topStuff.parentNode.insertBefore(container, topStuff);
+                  }
+                }
+              };
+              injectBanner();
+              const observer = new MutationObserver(injectBanner);
+              observer.observe(document.body, { childList: true, subtree: true });
+            })();
+          `;
+          view.webContents.executeJavaScript(promoCode).catch(() => {});
+        };
+
+        if (normalizedQuery.length > 2 && !isSpeed) {
+          // Fast-path: Check locally first to show the banner instantly
+          if (isBrowserDl || normalizedQuery.includes('chrome') || normalizedQuery.includes('firefox') || normalizedQuery.includes('edge') || normalizedQuery.includes('brave') || normalizedQuery.includes('opera') || normalizedQuery.includes('safari')) {
+            renderPromoBanner();
+          } else {
+            // Slow-path: Query Sarvam AI for complex queries
+            fetch('https://api.sarvam.ai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'api-subscription-key': SARVAM_API_KEY,
+                'Authorization': `Bearer ${SARVAM_API_KEY}`
+              },
+              body: JSON.stringify({
+                model: 'sarvam-105b',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'You are the intelligence of Vayu Browser. Classify if the user query is looking to search, setup or download competitor web browsers (e.g. Chrome, Firefox, Edge, Safari, Brave, Opera, etc.). Respond strictly with JSON: {"isBrowserSearch": true} or {"isBrowserSearch": false}.'
+                  },
+                  {
+                    role: 'user',
+                    content: `Query: ${query}`
+                  }
+                ],
+                temperature: 0.1
+              })
+            }).then(res => res.json()).then(data => {
+              if (data && data.choices && data.choices[0] && data.choices[0].message) {
+                const text = data.choices[0].message.content.trim();
+                const match = text.match(/\{.*?\}/s);
+                if (match) {
+                  const result = JSON.parse(match[0]);
+                  if (result && result.isBrowserSearch === true) {
+                    renderPromoBanner();
+                  }
+                }
+              }
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.error('Failed to process promo banner injection:', err);
+      }
+    }
+
     if (isImmersiveMode) {
       injectImmersiveUi(tab);
     }
-  });
+  };
+
+  view.webContents.on('did-finish-load', handlePageLoadOrNavigation);
+  view.webContents.on('did-navigate-in-page', handlePageLoadOrNavigation);
 
   view.webContents.on('page-title-updated', (event, title) => {
     const currentUrl = view.webContents.getURL();
@@ -1787,6 +2829,13 @@ function createTab(tabId, url, isIncognito = false) {
         adBlockEnabled: tab.adBlockEnabled
       });
     }
+  });
+
+  view.webContents.on('will-submit-form', (event, details) => {
+    if (!details) return;
+    const pageUrl = view.webContents.getURL();
+    const pageTitle = view.webContents.getTitle();
+    savePasswordEntryIfPresent(details, pageUrl, pageTitle);
   });
 
   view.webContents.on('page-favicon-updated', (event, favicons) => {
@@ -1902,11 +2951,17 @@ function createTab(tabId, url, isIncognito = false) {
                     break;
                   }
                   
-                  const hasAdClass = Array.from(parent.classList).some(cls => 
-                    cls.toLowerCase().includes('ad') || 
-                    cls.toLowerCase().includes('commercial') || 
-                    cls === 'uEerd'
-                  );
+                  const hasAdClass = parent.classList && Array.from(parent.classList).some(cls => {
+                    const lowercaseCls = cls.toLowerCase();
+                    return lowercaseCls === 'ad' || 
+                           lowercaseCls === 'ads' || 
+                           lowercaseCls.startsWith('ad-') || 
+                           lowercaseCls.startsWith('ads-') || 
+                           lowercaseCls.includes('-ad-') || 
+                           lowercaseCls.includes('-ads-') ||
+                           lowercaseCls.includes('commercial') || 
+                           lowercaseCls === 'uEerd';
+                  });
                   
                   if (parent.id === 'tads' || parent.id === 'tadsb' || parent.id === 'ads' || hasAdClass) {
                     parent.remove();
@@ -2075,6 +3130,108 @@ function navigateTab(tab, url) {
   }
 }
 
+function normalizePasswordFieldName(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function getPasswordFieldValue(fields, candidates) {
+  const lookup = Object.entries(fields || {}).reduce((acc, [key, value]) => {
+    const normalizedKey = normalizePasswordFieldName(key);
+    if (value !== undefined && value !== null && value !== '') {
+      acc[normalizedKey] = value;
+    }
+    return acc;
+  }, {});
+
+  for (const candidate of candidates) {
+    const val = lookup[candidate];
+    if (typeof val === 'string' && val.trim()) {
+      return val.trim();
+    }
+    if (Array.isArray(val)) {
+      const first = val.find(item => typeof item === 'string' && item.trim());
+      if (first) return String(first).trim();
+    }
+  }
+
+  return '';
+}
+
+function parseSubmittedFormData(details) {
+  const raw = details && (details.postData || details.formData || details.data || details.body);
+  if (!raw) return {};
+
+  if (typeof raw === 'string') {
+    const params = new URLSearchParams(raw);
+    return Object.fromEntries(Array.from(params.entries()));
+  }
+
+  if (Array.isArray(raw)) {
+    return raw.reduce((acc, entry) => {
+      if (entry && typeof entry === 'object') {
+        Object.assign(acc, parseSubmittedFormData(entry));
+      }
+      return acc;
+    }, {});
+  }
+
+  if (raw instanceof URLSearchParams) {
+    return Object.fromEntries(Array.from(raw.entries()));
+  }
+
+  if (typeof raw === 'object') {
+    const entries = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        entries[key] = String(value);
+      } else if (Array.isArray(value)) {
+        entries[key] = value.map(item => typeof item === 'string' ? item : String(item));
+      }
+    }
+    return entries;
+  }
+
+  return {};
+}
+
+function savePasswordEntryIfPresent(details, pageUrl, pageTitle) {
+  if (!details || !pageUrl) return;
+
+  try {
+    const parsedUrl = new URL(pageUrl);
+    const url = parsedUrl.origin || parsedUrl.href;
+    const fields = parseSubmittedFormData(details);
+    const username = getPasswordFieldValue(fields, ['username', 'email', 'login', 'user', 'user_name', 'userid', 'phone', 'account']);
+    const password = getPasswordFieldValue(fields, ['password', 'pass', 'passwd', 'pwd']);
+
+    if (!username || !password) return;
+
+    const site = url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    const normalizedEntry = {
+      id: `pw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      url: site,
+      title: pageTitle || parsedUrl.hostname,
+      username,
+      password,
+      createdAt: Date.now()
+    };
+
+    const exists = db.passwords.some((item) => item.url === site && item.username === username && item.password === password);
+    if (!exists) {
+      db.passwords.unshift(normalizedEntry);
+      if (db.passwords.length > 200) {
+        db.passwords = db.passwords.slice(0, 200);
+      }
+      saveDb();
+      if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('passwords-data', db.passwords);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to save submitted password entry:', err);
+  }
+}
+
 function logHistory(url, title) {
   // Do not log history for incognito or orbit internal urls
   if (activeTabId && tabs.has(activeTabId)) {
@@ -2207,6 +3364,19 @@ ipcMain.on('get-bookmarks', (event) => {
   event.reply('bookmarks-data', db.bookmarks);
 });
 
+ipcMain.on('get-passwords', (event) => {
+  event.reply('passwords-data', db.passwords || []);
+});
+
+ipcMain.on('clear-passwords', (event) => {
+  db.passwords = [];
+  saveDb();
+  event.reply('passwords-data', db.passwords);
+  if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('passwords-data', db.passwords);
+  }
+});
+
 ipcMain.on('add-bookmark', (event, { url, title }) => {
   const hadBookmarks = db.bookmarks.length > 0;
   // Check if already bookmarked
@@ -2296,6 +3466,14 @@ ipcMain.on('toggle-shield-popup', (event, rect) => {
   showShieldPopup(rect);
 });
 
+ipcMain.on('toggle-site-info-popup', (event, { url }) => {
+  showLocationNotification(url);
+});
+
+ipcMain.on('toggle-feedback-popup', (event, rect) => {
+  showFeedbackPopup(rect);
+});
+
 ipcMain.on('get-shield-info', (event) => {
   if (!activeTabId || !tabs.has(activeTabId)) return;
   const tab = tabs.get(activeTabId);
@@ -2329,12 +3507,78 @@ ipcMain.on('get-settings', (event) => {
   event.reply('settings-data', settingsData);
 });
 
+ipcMain.handle('get-search-engine', (event) => {
+  return (db.settings && db.settings.searchEngine) || 'https://www.google.com/search?q=';
+});
+
+ipcMain.handle('get-autocomplete-suggestions', (event, query) => {
+  if (!query) return [];
+  const normalizedQuery = query.toLowerCase();
+
+  const formatUrl = (urlString) => {
+    try {
+      const url = new URL(urlString);
+      let friendly = url.hostname;
+      if (url.pathname && url.pathname !== '/') friendly += url.pathname;
+      if (friendly.startsWith('www.')) friendly = friendly.substring(4);
+      return friendly;
+    } catch (e) {
+      return urlString;
+    }
+  };
+
+  const suggestions = [];
+  const seenUrls = new Set();
+
+  for (const b of db.bookmarks) {
+    if (!b.url) continue;
+    const friendly = formatUrl(b.url);
+    if (friendly.toLowerCase().includes(normalizedQuery) || (b.title && b.title.toLowerCase().includes(normalizedQuery))) {
+      if (!seenUrls.has(b.url)) {
+        seenUrls.add(b.url);
+        suggestions.push({ url: b.url, friendly, title: b.title, type: 'bookmark' });
+      }
+    }
+  }
+
+  for (const h of db.history) {
+    if (!h.url) continue;
+    const friendly = formatUrl(h.url);
+    if (friendly.toLowerCase().includes(normalizedQuery) || (h.title && h.title.toLowerCase().includes(normalizedQuery))) {
+      if (!seenUrls.has(h.url)) {
+        seenUrls.add(h.url);
+        suggestions.push({ url: h.url, friendly, title: h.title, type: 'history' });
+      }
+    }
+  }
+
+  return suggestions.slice(0, 8);
+});
+
 ipcMain.on('save-settings', (event, settings) => {
   db.settings = { ...db.settings, ...settings };
   saveDb();
   event.reply('settings-data', db.settings);
   if (mainWindow && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send('settings-data', db.settings);
+  }
+});
+
+ipcMain.on('save-permission', (event, { domain, permission, value }) => {
+  if (!db.permissions) db.permissions = {};
+  if (!db.permissions[domain]) db.permissions[domain] = {};
+  db.permissions[domain][permission] = value;
+  saveDb();
+
+  // Reload all open tabs for this domain whenever any permission button is turned ON or OFF
+  for (const tab of tabs.values()) {
+    try {
+      const tabUrl = tab.view.webContents.getURL();
+      const tabDomain = new URL(tabUrl).hostname;
+      if (tabDomain === domain) {
+        tab.view.webContents.reload();
+      }
+    } catch (e) {}
   }
 });
 

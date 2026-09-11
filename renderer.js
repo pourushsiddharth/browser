@@ -20,6 +20,7 @@ const sidebarToggleReader = document.getElementById('sidebar-toggle-reader');
 const sidebarToggleCollapseChrome = document.getElementById('sidebar-toggle-collapse-chrome');
 const sidebarBtnBookmarks = document.getElementById('sidebar-btn-bookmarks');
 const sidebarBtnHistory = document.getElementById('sidebar-btn-history');
+const sidebarBtnPasswords = document.getElementById('sidebar-btn-passwords');
 const sidebarBtnSettings = document.getElementById('sidebar-btn-settings');
 
 // Sidebar Shield elements
@@ -58,10 +59,13 @@ const sidebarTitle = document.getElementById('sidebar-title');
 const btnCloseSidebar = document.getElementById('btn-close-sidebar');
 const panelHistory = document.getElementById('panel-history');
 const panelBookmarks = document.getElementById('panel-bookmarks');
+const panelPasswords = document.getElementById('panel-passwords');
 const panelSettings = document.getElementById('panel-settings');
 const historyItemsList = document.getElementById('history-items-list');
 const bookmarksItemsList = document.getElementById('bookmarks-items-list');
+const passwordsItemsList = document.getElementById('passwords-items-list');
 const btnClearHistory = document.getElementById('btn-clear-history');
+const btnClearPasswords = document.getElementById('btn-clear-passwords');
 const btnDownloadsNav = document.getElementById('btn-downloads-nav');
 const downloadsBadge = document.getElementById('downloads-badge');
 const sidebarBtnDownloads = document.getElementById('sidebar-btn-downloads');
@@ -69,6 +73,7 @@ const panelDownloads = document.getElementById('panel-downloads');
 const downloadsItemsList = document.getElementById('downloads-items-list');
 const btnClearDownloads = document.getElementById('btn-clear-downloads');
 let downloadsData = [];
+let passwordsData = [];
 const toggleAdblockSetting = document.getElementById('toggle-adblock-setting');
 const selectSearchEngine = document.getElementById('select-search-engine');
 
@@ -179,7 +184,15 @@ function renderTabs() {
 
     // Favicon or Fallback
     let faviconHtml = '';
-    if (tab.isIncognito) {
+    if (tab.isLoading) {
+      faviconHtml = `
+        <div class="tab-loading-spinner">
+          <svg viewBox="0 0 16 16" class="spin-icon">
+            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="27 10" stroke-linecap="round"/>
+          </svg>
+        </div>
+      `;
+    } else if (tab.isIncognito) {
       // Spy sunglasses icon for Incognito favicon fallback
       faviconHtml = `
         <div class="tab-favicon-fallback">
@@ -202,14 +215,18 @@ function renderTabs() {
         </div>
       `;
     } else {
-      faviconHtml = `
-        <div class="tab-favicon-fallback">
-          <svg viewBox="0 0 24 24" width="10" height="10">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </div>
-      `;
+      if (tab.url === 'orbit://newtab' || !tab.url || tab.title === 'New Tab') {
+        faviconHtml = `<img class="tab-favicon" src="vayu_logo.png" alt="Vayu">`;
+      } else {
+        faviconHtml = `
+          <div class="tab-favicon-fallback">
+            <svg viewBox="0 0 24 24" width="10" height="10">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </div>
+        `;
+      }
     }
 
     // Title
@@ -329,6 +346,7 @@ function toggleSidebar(panelName) {
   // Hide all panels first
   panelHistory.classList.remove('active');
   panelBookmarks.classList.remove('active');
+  panelPasswords.classList.remove('active');
   panelSettings.classList.remove('active');
   panelControlCenter.classList.remove('active');
   panelShield.classList.remove('active');
@@ -343,6 +361,10 @@ function toggleSidebar(panelName) {
     sidebarTitle.textContent = 'Bookmarks';
     targetPanel = panelBookmarks;
     api.send('get-bookmarks');
+  } else if (panelName === 'passwords') {
+    sidebarTitle.textContent = 'Passwords';
+    targetPanel = panelPasswords;
+    api.send('get-passwords');
   } else if (panelName === 'settings') {
     sidebarTitle.textContent = 'Settings';
     targetPanel = panelSettings;
@@ -351,7 +373,7 @@ function toggleSidebar(panelName) {
     sidebarTitle.textContent = 'Control Center';
     targetPanel = panelControlCenter;
   } else if (panelName === 'shield') {
-    sidebarTitle.textContent = 'Orbit Shield';
+    sidebarTitle.textContent = 'Vayu Shield';
     targetPanel = panelShield;
     if (activeTabId && tabs.has(activeTabId)) {
       const tab = tabs.get(activeTabId);
@@ -545,6 +567,47 @@ function renderBookmarks(bookmarks) {
   updateToolbar();
 }
 
+function renderPasswords(passwords) {
+  passwordsData = Array.isArray(passwords) ? passwords : [];
+  passwordsItemsList.innerHTML = '';
+
+  if (passwordsData.length === 0) {
+    passwordsItemsList.innerHTML = '<div class="empty-list-msg" style="color: var(--text-muted); font-size:11px; padding:20px; text-align:center;">No saved passwords yet.</div>';
+    return;
+  }
+
+  passwordsData.forEach(item => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'list-item';
+
+    const hostname = (() => {
+      try {
+        return new URL(item.url.startsWith('http') ? item.url : `https://${item.url}`).hostname;
+      } catch (e) {
+        return item.url || 'Website';
+      }
+    })();
+
+    const showMask = item.password ? '••••••••' : '—';
+
+    itemEl.innerHTML = `
+      <div class="list-item-details" style="display:flex; flex-direction:column; gap:4px; width:100%;">
+        <span class="list-item-title" title="${item.title || hostname}" style="font-weight:600;">${item.title || hostname}</span>
+        <span class="list-item-url" title="${item.url}" style="font-size:10px; color: var(--text-muted);">${hostname}</span>
+        <span class="list-item-url" style="font-size:10px; color: var(--text-muted);">User: ${item.username || 'Unknown'} &nbsp;|&nbsp; Pass: ${showMask}</span>
+      </div>
+    `;
+
+    itemEl.addEventListener('click', () => {
+      if (confirm(`Copy password for ${hostname}?`)) {
+        navigator.clipboard.writeText(item.password || '').catch(() => {});
+      }
+    });
+
+    passwordsItemsList.appendChild(itemEl);
+  });
+}
+
 function renderDownloads(downloads) {
   downloadsData = downloads;
   downloadsItemsList.innerHTML = '';
@@ -728,6 +791,10 @@ api.on('history-data', (history) => {
 
 api.on('bookmarks-data', (bookmarks) => {
   renderBookmarks(bookmarks);
+});
+
+api.on('passwords-data', (passwords) => {
+  renderPasswords(passwords);
 });
 
 api.on('download-started', (download) => {
@@ -925,6 +992,10 @@ api.on('settings-data', (settings) => {
   if (settings.theme) {
     applyTheme(settings.theme);
   }
+  if (settings.searchEngine) {
+    selectSearchEngine.value = settings.searchEngine;
+    selectSearchEngine.dispatchEvent(new Event('sync'));
+  }
   
   if (!isFirstTabSpawned) {
     isFirstTabSpawned = true;
@@ -1024,8 +1095,21 @@ btnNewTab.addEventListener('click', () => createNewTab('orbit://newtab', false))
 btnNewIncognitoTab.addEventListener('click', () => createNewTab('orbit://newtab', true));
 
 // Address Bar actions
+let isDeletingAddress = false;
 addressBar.addEventListener('keydown', (e) => {
   const isSuggestionsOpen = !autocompleteDropdown.classList.contains('autocomplete-hidden');
+
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    isDeletingAddress = true;
+  } else {
+    isDeletingAddress = false;
+  }
+
+  // Accept inline suggestion on Tab key
+  if (e.key === 'Tab' && addressBar.selectionStart !== addressBar.selectionEnd) {
+    e.preventDefault();
+    addressBar.setSelectionRange(addressBar.value.length, addressBar.value.length);
+  }
 
   if (isSuggestionsOpen) {
     if (e.key === 'ArrowDown') {
@@ -1065,8 +1149,30 @@ addressBar.addEventListener('keydown', (e) => {
   }
 });
 
-addressBar.addEventListener('input', () => {
-  showSuggestions(addressBar.value.trim());
+addressBar.addEventListener('input', (e) => {
+  const query = addressBar.value;
+  showSuggestions(query.trim());
+
+  if (isDeletingAddress || !query.trim()) return;
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  // Find the first bookmark/history item in currentSuggestions that matches
+  const match = currentSuggestions.find(s => 
+    s.type !== 'search' && 
+    getFriendlyUrl(s.url).toLowerCase().startsWith(normalizedQuery)
+  );
+
+  if (match) {
+    const friendly = getFriendlyUrl(match.url);
+    const typedLength = query.length;
+
+    const completion = friendly.substring(typedLength);
+    if (completion.length > 0) {
+      addressBar.value = query + completion;
+      addressBar.setSelectionRange(typedLength, addressBar.value.length);
+    }
+  }
 });
 
 addressBar.addEventListener('focus', () => {
@@ -1102,6 +1208,31 @@ adblockShield.addEventListener('click', (e) => {
     height: rect.height
   });
 });
+
+// Site Info Settings icon click event
+const siteInfoLock = document.getElementById('site-info-lock');
+if (siteInfoLock) {
+  siteInfoLock.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activeTabId && tabs.has(activeTabId)) {
+      const tab = tabs.get(activeTabId);
+      api.send('toggle-site-info-popup', { url: tab.url });
+    }
+  });
+}
+
+// Feedback & Profile button click event
+const btnFeedbackProfile = document.getElementById('btn-feedback-profile');
+if (btnFeedbackProfile) {
+  btnFeedbackProfile.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const rect = btnFeedbackProfile.getBoundingClientRect();
+    api.send('toggle-feedback-popup', {
+      left: rect.left,
+      bottom: rect.bottom
+    });
+  });
+}
 
 sidebarShieldToggle.addEventListener('change', () => {
   if (activeTabId) {
@@ -1215,6 +1346,10 @@ sidebarBtnHistory.addEventListener('click', () => {
   toggleSidebar('history');
 });
 
+sidebarBtnPasswords.addEventListener('click', () => {
+  toggleSidebar('passwords');
+});
+
 sidebarBtnSettings.addEventListener('click', () => {
   toggleSidebar('settings');
 });
@@ -1247,6 +1382,12 @@ btnClearHistory.addEventListener('click', () => {
   }
 });
 
+btnClearPasswords.addEventListener('click', () => {
+  if (confirm('Are you sure you want to clear all saved passwords?')) {
+    api.send('clear-passwords');
+  }
+});
+
 // Settings interactions
 toggleAdblockSetting.addEventListener('change', () => {
   api.send('toggle-adblock', { global: true });
@@ -1256,7 +1397,66 @@ selectSearchEngine.addEventListener('change', () => {
   api.send('save-settings', { searchEngine: selectSearchEngine.value });
 });
 
+function initCustomDropdown() {
+  const select = document.getElementById('select-search-engine');
+  const dropdown = document.getElementById('custom-search-dropdown');
+  if (!select || !dropdown) return;
 
+  const trigger = dropdown.querySelector('.custom-dropdown-trigger');
+  const valueSpan = dropdown.querySelector('.custom-dropdown-value');
+  const options = dropdown.querySelectorAll('.custom-dropdown-option');
+
+  // Toggle dropdown on click
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  });
+
+  // Select an option
+  options.forEach(option => {
+    option.addEventListener('click', () => {
+      const val = option.dataset.value;
+      select.value = val;
+      
+      // Update custom UI active state
+      options.forEach(opt => opt.classList.remove('active'));
+      option.classList.add('active');
+      valueSpan.textContent = option.textContent;
+
+      // Close dropdown
+      dropdown.classList.remove('open');
+
+      // Dispatch change event to the hidden select element
+      select.dispatchEvent(new Event('change'));
+    });
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  // Sync custom dropdown when hidden select value is updated programmatically
+  const syncDropdown = () => {
+    const val = select.value;
+    options.forEach(option => {
+      if (option.dataset.value === val) {
+        option.classList.add('active');
+        valueSpan.textContent = option.textContent;
+      } else {
+        option.classList.remove('active');
+      }
+    });
+  };
+
+  // Sync initial state
+  syncDropdown();
+  
+  // Listen to programmatic updates
+  select.addEventListener('sync', syncDropdown);
+}
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', () => {
@@ -1265,6 +1465,9 @@ window.addEventListener('DOMContentLoaded', () => {
   api.send('get-bookmarks');
   api.send('get-settings');
   api.send('get-downloads');
+  
+  // Init custom dropdown
+  initCustomDropdown();
 });
 
 // Fallback Escape listener for when focus is outside the webview (on the browser chrome/frame)

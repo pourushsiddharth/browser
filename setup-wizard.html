@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vayu Setup Wizard</title>
+  <link rel="stylesheet" href="setup-wizard.css">
+</head>
+<body>
+  <main class="wizard-shell" role="application" aria-label="Vayu setup wizard">
+    <aside class="wizard-sidebar">
+      <div class="brand-wrap">
+        <img src="vayu_logo.png" alt="Vayu logo" class="brand-logo">
+      </div>
+
+      <nav class="stepper" aria-label="Installation steps">
+        <button class="step-item is-active" data-step="0" type="button">
+          <span class="step-icon">1</span>
+          <span class="step-copy">
+            <span class="step-title">Welcome</span>
+            <span class="step-subtitle">Start the installation</span>
+          </span>
+        </button>
+
+        <button class="step-item" data-step="1" type="button">
+          <span class="step-icon">2</span>
+          <span class="step-copy">
+            <span class="step-title">License Agreement</span>
+            <span class="step-subtitle">Review and accept terms</span>
+          </span>
+        </button>
+
+        <button class="step-item" data-step="2" type="button">
+          <span class="step-icon">3</span>
+          <span class="step-copy">
+            <span class="step-title">Installation</span>
+            <span class="step-subtitle">Choose install options</span>
+          </span>
+        </button>
+
+        <button class="step-item" data-step="3" type="button">
+          <span class="step-icon">4</span>
+          <span class="step-copy">
+            <span class="step-title">Progress</span>
+            <span class="step-subtitle">Installing Vayu</span>
+          </span>
+        </button>
+
+        <button class="step-item" data-step="4" type="button">
+          <span class="step-icon">5</span>
+          <span class="step-copy">
+            <span class="step-title">Finish</span>
+            <span class="step-subtitle">Ready to launch</span>
+          </span>
+        </button>
+      </nav>
+    </aside>
+
+    <section class="wizard-main">
+      <header class="hero-header" aria-hidden="true"></header>
+
+      <section class="panel is-active" data-panel="0">
+        <h1>Welcome to <span>Vayu</span> Installer</h1>
+        <p class="lead">Set up Vayu in under a minute with secure defaults and performance-first tuning.</p>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>Secure</h3>
+            <p>Privacy-first defaults from day one.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Fast</h3>
+            <p>Lightweight footprint and optimized startup.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Reliable</h3>
+            <p>Stable runtime built on Chromium + Electron.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Private</h3>
+            <p>Built-in ad and tracker shielding.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="1">
+        <h2>License Agreement</h2>
+        <p class="lead">Please read the terms before continuing.</p>
+        <div class="license-box" aria-label="License text">
+          <p>1. You may install and use Vayu for personal and commercial use.</p>
+          <p>2. Vayu is provided "as is" without any warranties of any kind.</p>
+          <p>3. You agree not to reverse engineer or misuse the software.</p>
+          <p>4. Anonymous telemetry may be collected only if enabled by you.</p>
+          <p>5. By continuing, you accept the terms and privacy practices.</p>
+        </div>
+        <label class="check-row">
+          <input id="accept-license" type="checkbox">
+          <span>I accept the License Agreement</span>
+        </label>
+      </section>
+
+      <section class="panel" data-panel="2">
+        <h2>Installation Options</h2>
+        <p class="lead">Choose where and how Vayu should be installed.</p>
+
+        <div class="field-row">
+          <label for="install-path">Installation Location</label>
+          <div class="field-group">
+            <input id="install-path" type="text" value="C:\\Program Files\\Vayu" readonly>
+            <button type="button" class="ghost-btn">Browse...</button>
+          </div>
+        </div>
+
+        <div class="option-grid">
+          <label class="option-card">
+            <input type="checkbox" checked>
+            <span>Create desktop shortcut</span>
+          </label>
+          <label class="option-card">
+            <input type="checkbox" checked>
+            <span>Pin Vayu to Start menu</span>
+          </label>
+          <label class="option-card">
+            <input type="checkbox" checked>
+            <span>Set Vayu as default browser</span>
+          </label>
+          <label class="option-card">
+            <input type="checkbox" checked>
+            <span>Enable smart privacy shield</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="3">
+        <h2>Installing Vayu</h2>
+        <p class="lead">Please wait while setup configures your browser.</p>
+
+        <div class="progress-wrap" role="status" aria-live="polite">
+          <div class="progress-track">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="progress-label">Preparing files...</span>
+            <span id="progress-value">0%</span>
+          </div>
+        </div>
+
+        <ul class="task-list" id="task-list">
+          <li data-task="0">Extracting package</li>
+          <li data-task="1">Installing dependencies</li>
+          <li data-task="2">Applying browser defaults</li>
+          <li data-task="3">Finishing setup</li>
+        </ul>
+      </section>
+
+      <section class="panel" data-panel="4">
+        <h2>Vayu Is Ready</h2>
+        <p class="lead">Installation completed successfully. You can launch Vayu now.</p>
+
+        <div class="finish-card">
+          <label class="check-row">
+            <input id="launch-now" type="checkbox" checked>
+            <span>Launch Vayu after closing setup</span>
+          </label>
+          <label class="check-row">
+            <input id="open-release" type="checkbox">
+            <span>Open release notes on first launch</span>
+          </label>
+        </div>
+      </section>
+
+      <footer class="wizard-actions">
+        <button id="btn-back" type="button" class="ghost-btn" disabled>Back</button>
+        <div class="right-actions">
+          <button id="btn-cancel" type="button" class="ghost-btn">Cancel</button>
+          <button id="btn-next" type="button" class="primary-btn">Next</button>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <script src="setup-wizard.js"></script>
+</body>
+</html>

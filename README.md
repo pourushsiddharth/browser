@@ -16,7 +16,7 @@ Orbit Browser gives you a normal browser window with its own tabs, navigation bu
 - History panel to revisit pages you opened before.
 - Downloads panel to see downloaded files.
 - New tab page with a clock, greeting, search box, and quick settings.
-- Search engine choice with Google, DuckDuckGo, or Bing.
+- Search engine choice with Google, DuckDuckGo, Bing, Yahoo, Yandex, or Qmamu.
 - Reader mode for a cleaner reading view.
 - Immersive mode to focus on the page.
 - Compact header option to hide the browser bars when you want more space.

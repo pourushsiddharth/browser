@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('api', {
       'chrome-hover-status',
       'log-to-main',
       'toggle-shield-popup',
+      'toggle-site-info-popup',
+      'toggle-feedback-popup',
       'get-shield-info',
       'close-shield-popup',
       'show-bookmark-context-menu',

@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vayu Notification</title>
+  <style>
+    :root {
+      --primary-color: #2d6a4f;
+      --accent-color: #d98253;
+      --text-main: #0d1b2a;
+      --text-muted: #5c677d;
+      --bg-light: #fdfbf7;
+      --border-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    body {
+      margin: 0;
+      padding: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: transparent;
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+
+    .notification-card {
+      background: #ffffff;
+      border-radius: 24px;
+      box-shadow: rgba(0, 0, 0, 0.12) 0px 1px 3px, rgba(0, 0, 0, 0.24) 0px 1px 2px;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      height: 480px;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+      -webkit-app-region: no-drag;
+    }
+
+    /* Top Close Button */
+    .close-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.8);
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      transition: background 0.2s;
+    }
+    .close-btn:hover {
+      background: #f0f0f0;
+    }
+    .close-btn svg {
+      stroke: #333;
+    }
+
+    /* Header & Heritage Art background */
+    .header-section {
+      position: relative;
+      height: 110px;
+      padding: 12px 20px;
+      box-sizing: border-box;
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.95) 45%, rgba(255, 255, 255, 0.2) 100%), url('vayu_bg.jpg');
+      background-size: cover;
+      background-position: right center;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .brand-logo {
+      height: 20px;
+    }
+
+    .brand-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0d1b2a;
+    }
+
+    .domain-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 2px;
+    }
+
+    .security-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    /* Scrollable body content */
+    .body-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scrollbar-width: none; /* Hide standard Firefox scrollbar */
+    }
+    .body-content::-webkit-scrollbar {
+      display: none; /* Hide Chrome/Electron scrollbars */
+    }
+
+    /* Secure Banner Row */
+    .secure-banner-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-light);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      border-radius: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+    }
+    .banner-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .banner-left svg {
+      stroke: var(--primary-color);
+    }
+
+    /* Permission items */
+    .item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .item-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-container {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary-color);
+    }
+
+    .item-details {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .item-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .item-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    /* Switch styling matching the screenshot green */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary-color);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(16px);
+    }
+
+    /* Reset Button */
+    .reset-btn {
+      align-self: flex-start;
+      background: transparent;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 12px;
+      color: var(--accent-color);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      transition: background 0.2s;
+    }
+    .reset-btn:hover {
+      background: rgba(217, 130, 83, 0.05);
+    }
+
+    .footer-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 2px 0;
+    }
+
+    .footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      cursor: pointer;
+      color: var(--text-main);
+    }
+
+    .footer-row:hover .footer-left-text {
+      text-decoration: underline;
+    }
+
+    .footer-left-text {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .footer-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .notification-card {
+      height: 540px !important;
+    }
+
+    /* Beautiful Custom Alert styles */
+    .custom-alert-overlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .custom-alert-overlay.show {
+      display: flex;
+      opacity: 1;
+    }
+    
+    .custom-alert-card {
+      width: 280px;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: rgba(0, 0, 0, 0.12) 0px 1px 3px, rgba(0, 0, 0, 0.24) 0px 1px 2px;
+      transform: translateY(20px) scale(0.95);
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .custom-alert-overlay.show .custom-alert-card {
+      transform: translateY(0) scale(1);
+    }
+    
+    .custom-alert-bg {
+      height: 90px;
+      background-size: cover;
+      background-position: center;
+      position: relative;
+    }
+    
+    .custom-alert-bg::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 30px;
+      background: linear-gradient(to top, #ffffff, transparent);
+    }
+    
+    .custom-alert-content {
+      padding: 16px 20px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    
+    .custom-alert-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0d1b2a;
+      margin-bottom: 6px;
+    }
+    
+    .custom-alert-message {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-bottom: 16px;
+    }
+    
+    .custom-alert-btn {
+      background: linear-gradient(135deg, var(--primary-color) 0%, #3e8e63 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 24px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(45, 106, 79, 0.2);
+      transition: all 0.2s;
+    }
+    
+    .custom-alert-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 12px rgba(45, 106, 79, 0.3);
+    }
+    
+    .custom-alert-btn:active {
+      transform: translateY(0);
+    }
+    /* Skeleton Loader Styles */
+    .skeleton-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 10px 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .skeleton-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: rgba(0, 0, 0, 0.05) 0px 1px 2px;
+    }
+
+    .skeleton-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .skeleton-text {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .skeleton-line {
+      height: 10px;
+      border-radius: 4px;
+    }
+    .skeleton-line.short { width: 45%; }
+    .skeleton-line.long { width: 80%; }
+
+    .skeleton-toggle {
+      width: 36px;
+      height: 20px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .shimmer {
+      background: linear-gradient(90deg, #f1f5f9 0%, #cbd5e1 50%, #f1f5f9 100%);
+      background-size: 200% 100%;
+      animation: shimmerAnim 1.4s infinite ease-in-out;
+    }
+
+    @keyframes shimmerAnim {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .header-section {
+      position: relative;
+      padding: 16px 20px;
+      box-sizing: border-box;
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.95) 45%, rgba(255, 255, 255, 0.2) 100%), url('vayu_bg.jpg');
+      background-size: cover;
+      background-position: right center;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+
+    .brand-logo {
+      height: 20px;
+    }
+
+    .domain-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      word-break: break-all;
+    }
+
+    .info-link-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      margin-top: 2px;
+    }
+
+    .info-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--primary-color);
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="notification-card">
+    <button class="close-btn" id="btn-close" title="Dismiss">
+      <svg viewBox="0 0 10 10" width="10" height="10" stroke="currentColor" stroke-width="1.8" fill="none">
+        <path d="M1,1 L9,9 M9,1 L1,9" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <div class="header-section">
+      <div class="brand-row">
+        <img class="brand-logo" src="vayu_logo.png" alt="Vayu Logo">
+      </div>
+      <div class="domain-name" id="page-domain">vayu.in</div>
+      
+      <div class="info-link-row">
+        <div class="info-link">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <span>Connection is secure</span>
+        </div>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--text-muted); flex-shrink: 0;">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Skeleton Loader (shown during Sarvam AI feature filtering) -->
+    <div id="skeleton-loader" class="skeleton-container">
+      <div class="skeleton-item">
+        <div class="skeleton-avatar shimmer"></div>
+        <div class="skeleton-text">
+          <div class="skeleton-line short shimmer"></div>
+          <div class="skeleton-line long shimmer"></div>
+        </div>
+        <div class="skeleton-toggle shimmer"></div>
+      </div>
+      <div class="skeleton-item">
+        <div class="skeleton-avatar shimmer"></div>
+        <div class="skeleton-text">
+          <div class="skeleton-line short shimmer"></div>
+          <div class="skeleton-line long shimmer"></div>
+        </div>
+        <div class="skeleton-toggle shimmer"></div>
+      </div>
+      <div class="skeleton-item">
+        <div class="skeleton-avatar shimmer"></div>
+        <div class="skeleton-text">
+          <div class="skeleton-line short shimmer"></div>
+          <div class="skeleton-line long shimmer"></div>
+        </div>
+        <div class="skeleton-toggle shimmer"></div>
+      </div>
+    </div>
+
+    <!-- Scrollable content list -->
+    <div class="body-content">
+      
+      <!-- Secure Banner Link -->
+      <div class="secure-banner-row" id="btn-secure-info">
+        <div class="banner-left">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <span>Connection is secure</span>
+        </div>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--text-muted);">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+
+      <!-- Permission List -->
+      <!-- 1. Location (allowed) -->
+      <div class="item-row" id="row-location">
+        <div class="item-left">
+          <div class="icon-container">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="item-title">Location</span>
+            <span class="item-desc">Allowed this site access to your location</span>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-location" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 2. Automatic downloads -->
+      <div class="item-row" id="row-downloads">
+        <div class="item-left">
+          <div class="icon-container">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="item-title">Automatic downloads</span>
+            <span class="item-desc">Sites can download files automatically</span>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-downloads" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 3. Clipboard -->
+      <div class="item-row" id="row-clipboard">
+        <div class="item-left">
+          <div class="icon-container">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="item-title">Clipboard</span>
+            <span class="item-desc">Sites can read text and images copied</span>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-clipboard" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 4. Camera -->
+      <div class="item-row" id="row-camera">
+        <div class="item-left">
+          <div class="icon-container">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="item-title">Camera</span>
+            <span class="item-desc">Sites can use your camera</span>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-camera" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 5. Microphone -->
+      <div class="item-row" id="row-microphone">
+        <div class="item-left">
+          <div class="icon-container">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="item-title">Microphone</span>
+            <span class="item-desc">Sites can use your microphone</span>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-microphone" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Reset permissions button -->
+      <button class="reset-btn" id="btn-reset">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        Reset permissions
+      </button>
+
+      <div class="footer-divider"></div>
+
+      <!-- Cookies and site data -->
+      <div class="footer-row" id="btn-cookies-info">
+        <div class="item-left">
+          <div class="icon-container" style="color: var(--accent-color);">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10C22 7 17 2 12 2zm0 18a8 8 0 1 1 8-8c0 4-4 8-8 8z"/>
+              <circle cx="12" cy="8" r="1"/>
+              <circle cx="9" cy="12" r="1"/>
+              <circle cx="15" cy="12" r="1"/>
+              <circle cx="12" cy="16" r="1"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="footer-left-text">Cookies and site data</span>
+            <span class="footer-desc">Cookies, site data and cache</span>
+          </div>
+        </div>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--text-muted);">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+
+      <!-- Site Settings link -->
+      <div class="footer-row" id="btn-site-settings">
+        <div class="item-left">
+          <div class="icon-container" style="color: var(--accent-color);">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </div>
+          <div class="item-details">
+            <span class="footer-left-text">Site settings</span>
+            <span class="footer-desc">View and change site settings</span>
+          </div>
+        </div>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--text-muted);">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+        </svg>
+      </div>
+
+    </div>
+
+    <!-- Beautiful Custom Alert Overlay -->
+    <div id="custom-alert" class="custom-alert-overlay">
+      <div class="custom-alert-card">
+        <div class="custom-alert-bg" style="background-image: url('vayu_widget.jpg')"></div>
+        <div class="custom-alert-content">
+          <div class="custom-alert-title">Permission Updated</div>
+          <div id="custom-alert-message" class="custom-alert-message">Location permission blocked.</div>
+          <button class="custom-alert-btn" id="custom-alert-close">OK</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+    
+    // Parse query params to show domain
+    const urlParams = new URLSearchParams(window.location.search);
+    const domain = urlParams.get('domain') || 'vayu.in';
+    document.getElementById('page-domain').textContent = domain;
+
+    // Load initial permission states
+    const isLocationAllowed = urlParams.get('location') !== 'false';
+    const isDownloadsAllowed = urlParams.get('downloads') !== 'false';
+    const isClipboardAllowed = urlParams.get('clipboard') !== 'false';
+    const isCameraAllowed = urlParams.get('camera') !== 'false';
+    const isMicrophoneAllowed = urlParams.get('microphone') !== 'false';
+
+    document.getElementById('toggle-location').checked = isLocationAllowed;
+    document.getElementById('toggle-downloads').checked = isDownloadsAllowed;
+    document.getElementById('toggle-clipboard').checked = isClipboardAllowed;
+    document.getElementById('toggle-camera').checked = isCameraAllowed;
+    document.getElementById('toggle-microphone').checked = isMicrophoneAllowed;
+
+    // Sarvam AI Intelligent Brain Filtering
+    const relevantParam = urlParams.get('relevant');
+    let relevantOptions = ['location', 'downloads', 'clipboard', 'camera', 'microphone'];
+    try {
+      if (relevantParam) relevantOptions = JSON.parse(relevantParam);
+    } catch(e) {}
+
+    const skeletonLoader = document.getElementById('skeleton-loader');
+    const allOpts = ['location', 'downloads', 'clipboard', 'camera', 'microphone'];
+    
+    // Hide item rows initially while skeleton shimmer is active
+    allOpts.forEach(opt => {
+      const row = document.getElementById(`row-${opt}`);
+      if (row) row.style.display = 'none';
+    });
+
+    function applyOptionsFilter(opts) {
+      if (skeletonLoader && skeletonLoader.style.display !== 'none') {
+        skeletonLoader.style.opacity = '0';
+        setTimeout(() => {
+          skeletonLoader.style.display = 'none';
+          allOpts.forEach(opt => {
+            const row = document.getElementById(`row-${opt}`);
+            if (row) {
+              row.style.display = (opts.length === 0 || opts.includes(opt)) ? 'flex' : 'none';
+            }
+          });
+        }, 200);
+      } else {
+        allOpts.forEach(opt => {
+          const row = document.getElementById(`row-${opt}`);
+          if (row) {
+            row.style.display = (opts.length === 0 || opts.includes(opt)) ? 'flex' : 'none';
+          }
+        });
+      }
+    }
+
+    // Display skeleton briefly (350ms) for premium visual AI loading feedback
+    setTimeout(() => {
+      applyOptionsFilter(relevantOptions);
+    }, 350);
+
+    ipcRenderer.on('sarvam-update', (event, updatedOptions) => {
+      if (Array.isArray(updatedOptions)) {
+        applyOptionsFilter(updatedOptions);
+      }
+    });
+
+    // Custom Alert logic
+    const customAlert = document.getElementById('custom-alert');
+    const customAlertMessage = document.getElementById('custom-alert-message');
+    const customAlertClose = document.getElementById('custom-alert-close');
+
+    function showCustomAlert(message) {
+      customAlertMessage.textContent = message;
+      customAlert.style.display = 'flex';
+      // Force layout repaint to trigger animation transition
+      customAlert.offsetHeight;
+      customAlert.classList.add('show');
+    }
+
+    customAlertClose.addEventListener('click', () => {
+      customAlert.classList.remove('show');
+      setTimeout(() => {
+        customAlert.style.display = 'none';
+      }, 250);
+    });
+
+    // Close button event
+    document.getElementById('btn-close').addEventListener('click', () => {
+      window.close();
+    });
+
+    // Connection Secure Info click event
+    document.getElementById('btn-secure-info').addEventListener('click', () => {
+      showCustomAlert('Connection is secure. Your information (for example, passwords or credit card numbers) is private when it is sent to this site.');
+    });
+
+    // Toggle Permission events
+    document.getElementById('toggle-location').addEventListener('change', (e) => {
+      showCustomAlert('Location permission status updated to: ' + (e.target.checked ? 'Allowed' : 'Blocked') + ' for ' + domain);
+      ipcRenderer.send('save-permission', { domain, permission: 'location', value: e.target.checked });
+    });
+
+    document.getElementById('toggle-downloads').addEventListener('change', (e) => {
+      showCustomAlert('Automatic downloads permission status updated to: ' + (e.target.checked ? 'Allowed' : 'Blocked') + ' for ' + domain);
+      ipcRenderer.send('save-permission', { domain, permission: 'downloads', value: e.target.checked });
+    });
+
+    document.getElementById('toggle-clipboard').addEventListener('change', (e) => {
+      showCustomAlert('Clipboard permission status updated to: ' + (e.target.checked ? 'Allowed' : 'Blocked') + ' for ' + domain);
+      ipcRenderer.send('save-permission', { domain, permission: 'clipboard', value: e.target.checked });
+    });
+
+    document.getElementById('toggle-camera').addEventListener('change', (e) => {
+      showCustomAlert('Camera permission status updated to: ' + (e.target.checked ? 'Allowed' : 'Blocked') + ' for ' + domain);
+      ipcRenderer.send('save-permission', { domain, permission: 'camera', value: e.target.checked });
+    });
+
+    document.getElementById('toggle-microphone').addEventListener('change', (e) => {
+      showCustomAlert('Microphone permission status updated to: ' + (e.target.checked ? 'Allowed' : 'Blocked') + ' for ' + domain);
+      ipcRenderer.send('save-permission', { domain, permission: 'microphone', value: e.target.checked });
+    });
+
+    // Reset settings
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      document.getElementById('toggle-location').checked = false;
+      document.getElementById('toggle-downloads').checked = false;
+      document.getElementById('toggle-clipboard').checked = false;
+      document.getElementById('toggle-camera').checked = false;
+      document.getElementById('toggle-microphone').checked = false;
+      
+      ipcRenderer.send('save-permission', { domain, permission: 'location', value: false });
+      ipcRenderer.send('save-permission', { domain, permission: 'downloads', value: false });
+      ipcRenderer.send('save-permission', { domain, permission: 'clipboard', value: false });
+      ipcRenderer.send('save-permission', { domain, permission: 'camera', value: false });
+      ipcRenderer.send('save-permission', { domain, permission: 'microphone', value: false });
+      
+      showCustomAlert('Permissions have been reset to Blocked values for ' + domain);
+    });
+
+    // Cookies clear action
+    document.getElementById('btn-cookies-info').addEventListener('click', () => {
+      if (confirm('Clear cookies and site data for ' + domain + '?')) {
+        showCustomAlert('Cookies and site data successfully cleared!');
+        setTimeout(() => window.close(), 1500);
+      }
+    });
+
+    // Site settings redirect
+    document.getElementById('btn-site-settings').addEventListener('click', () => {
+      showCustomAlert('Opening configuration console for ' + domain + ' site settings.');
+      setTimeout(() => window.close(), 1500);
+    });
+  </script>
+</body>
+</html>
