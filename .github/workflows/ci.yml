@@ -1,0 +1,68 @@
+name: Vayu Browser CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Lint & Unit Tests
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify JavaScript syntax
+        run: |
+          node -c main.js
+          node -c preload.js
+          node -c preload-tab.js
+          node -c src/main/db.js
+          node -c src/main/permissions.js
+          node -c src/main/downloads.js
+          node -c src/main/session-manager.js
+          node -c src/main/tabs.js
+          node -c src/main/windows.js
+          node -c src/main/navigation.js
+          node -c src/browser/adblock.js
+          node -c src/browser/security.js
+
+      - name: Run automated test suite
+        run: npm test
+
+  build-check:
+    name: Package Build Dry Run
+    needs: test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build unpacked executable
+        run: npm run build

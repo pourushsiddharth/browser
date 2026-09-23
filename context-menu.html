@@ -215,8 +215,6 @@
   </div>
 
   <script>
-    const { ipcRenderer } = require('electron');
-
     const urlParams = new URLSearchParams(window.location.search);
     const paramsData = JSON.parse(decodeURIComponent(urlParams.get('params') || '{}'));
 
@@ -235,7 +233,9 @@
         ${shortcut ? `<span class="shortcut">${shortcut}</span>` : ''}
       `;
       div.addEventListener('click', () => {
-        ipcRenderer.send('context-menu-action', { action, params: paramsData });
+        if (window.api && window.api.send) {
+          window.api.send('context-menu-action', { action, params: paramsData });
+        }
       });
       return div;
     }
@@ -321,9 +321,11 @@
     }
 
     // Default fast initial render if cached, or wait for IPC resolution from main process
-    ipcRenderer.on('sarvam-contextmenu-resolved', (event, allowedFeatures) => {
-      renderMenuItems(allowedFeatures);
-    });
+    if (window.api && window.api.on) {
+      window.api.on('sarvam-contextmenu-resolved', (allowedFeatures) => {
+        renderMenuItems(allowedFeatures);
+      });
+    }
 
     // If initial fast render passed
     const initialAllowedStr = urlParams.get('allowed');

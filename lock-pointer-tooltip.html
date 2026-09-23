@@ -108,7 +108,6 @@
   </div>
 
   <script>
-    const { ipcRenderer } = require('electron');
     const urlParams = new URLSearchParams(window.location.search);
     const title = urlParams.get('title') || 'Click Lock Icon Here';
     const desc = urlParams.get('desc') || 'Turn on camera or microphone for this site';

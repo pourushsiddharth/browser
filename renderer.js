@@ -432,7 +432,17 @@ function renderHistory(history) {
   historyItemsList.innerHTML = '';
 
   if (history.length === 0) {
-    historyItemsList.innerHTML = '<div class="empty-list-msg" style="color: var(--text-muted); font-size:11px; padding:20px; text-align:center;">No history recorded yet.</div>';
+    historyItemsList.innerHTML = `
+      <div class="empty-state-view">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="empty-state-text">No history recorded yet</div>
+      </div>
+    `;
     return;
   }
 
@@ -472,7 +482,16 @@ function renderBookmarks(bookmarks) {
   // Render Sidebar
   bookmarksItemsList.innerHTML = '';
   if (bookmarks.length === 0) {
-    bookmarksItemsList.innerHTML = '<div class="empty-list-msg" style="color: var(--text-muted); font-size:11px; padding:20px; text-align:center;">No bookmarks saved yet.</div>';
+    bookmarksItemsList.innerHTML = `
+      <div class="empty-state-view">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </div>
+        <div class="empty-state-text">No bookmarks saved yet</div>
+      </div>
+    `;
   } else {
     bookmarks.forEach(item => {
       let faviconUrl = '';
@@ -572,7 +591,17 @@ function renderPasswords(passwords) {
   passwordsItemsList.innerHTML = '';
 
   if (passwordsData.length === 0) {
-    passwordsItemsList.innerHTML = '<div class="empty-list-msg" style="color: var(--text-muted); font-size:11px; padding:20px; text-align:center;">No saved passwords yet.</div>';
+    passwordsItemsList.innerHTML = `
+      <div class="empty-state-view">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div class="empty-state-text">No saved passwords yet</div>
+      </div>
+    `;
     return;
   }
 
@@ -621,7 +650,18 @@ function renderDownloads(downloads) {
   }
 
   if (downloads.length === 0) {
-    downloadsItemsList.innerHTML = '<div class="empty-list-msg" style="color: var(--text-muted); font-size:11px; padding:20px; text-align:center;">No downloads yet.</div>';
+    downloadsItemsList.innerHTML = `
+      <div class="empty-state-view">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
+        <div class="empty-state-text">No downloads yet</div>
+      </div>
+    `;
     return;
   }
 

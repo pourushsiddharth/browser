@@ -597,17 +597,57 @@ body.has-bookmarks #bookmarks-bar {
 }
 
 .sidebar-header {
-  padding: 16px 20px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+  min-height: 56px;
 }
 
 .sidebar-header h3 {
   font-family: 'Outfit', sans-serif;
   font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 0;
+  text-align: center;
+  flex: 1;
+}
+
+.sidebar-header-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background-color: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.sidebar-header-btn:hover {
+  background-color: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+  transform: scale(1.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.sidebar-header-btn:active {
+  transform: scale(0.95);
+}
+
+.sidebar-header-btn svg {
+  display: block;
 }
 
 .icon-btn {
@@ -627,29 +667,6 @@ body.has-bookmarks #bookmarks-bar {
 .icon-btn:hover {
   background-color: var(--hover-bg);
   color: var(--text-primary);
-}
-
-#btn-close-sidebar {
-  color: var(--text-primary) !important;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: var(--hover-bg);
-  transition: all 0.2s ease;
-}
-
-#btn-close-sidebar:hover {
-  background-color: var(--bg-active);
-  transform: scale(1.08);
-}
-
-#btn-close-sidebar svg {
-  width: 14px;
-  height: 14px;
-}
-
-#btn-close-sidebar svg line {
-  stroke-width: 3px !important;
 }
 
 .sidebar-panel {
@@ -781,36 +798,90 @@ body.has-bookmarks #bookmarks-bar {
 }
 
 .panel-actions {
-  padding: 10px 20px;
+  padding: 4px 14px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 40px;
 }
 
+/* Material Design Components (MDC) Style Icon Button */
+.mdc-icon-btn,
 .action-btn {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 11px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-weight: 500;
-  transition: var(--transition-fast);
+  padding: 0;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
+.mdc-icon-btn:hover,
 .action-btn:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.mdc-icon-btn:active,
+.action-btn:active {
   background-color: var(--bg-active);
-  border-color: var(--border-color);
+  transform: scale(0.92);
 }
 
-.action-btn.danger {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.2);
-}
-
+.mdc-icon-btn.danger:hover,
 .action-btn.danger:hover {
   background-color: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.mdc-icon-btn svg,
+.action-btn svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+  stroke-width: 2;
+  display: block;
+}
+
+/* Chrome-style Minimal Empty State View */
+.empty-state-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 24px;
+  height: 60%;
+}
+
+.empty-state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  opacity: 0.65;
+}
+
+.empty-state-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.empty-state-text {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
 }
 
 .list-item {
@@ -1745,36 +1816,50 @@ body.chrome-collapsed.sidebar-open #browser-chrome {
 
 .dl-action-btn {
   font-family: inherit;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 16px;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
 }
 
 .dl-action-btn.primary {
   background-color: var(--accent-color);
   color: #ffffff;
-  box-shadow: 0 2px 4px rgba(124, 58, 237, 0.15);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--accent-color) 25%, transparent);
 }
 
 .dl-action-btn.primary:hover {
   background-color: var(--accent-hover);
-  transform: translateY(-0.5px);
-  box-shadow: 0 4px 8px rgba(124, 58, 237, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+.dl-action-btn.primary:active {
+  transform: translateY(0) scale(0.97);
 }
 
 .dl-action-btn.secondary {
-  background-color: transparent;
+  background-color: color-mix(in srgb, var(--text-primary) 4%, transparent);
   border-color: var(--border-color);
   color: var(--text-secondary);
 }
 
 .dl-action-btn.secondary:hover {
-  background-color: var(--border-color);
+  background-color: color-mix(in srgb, var(--text-primary) 8%, transparent);
   color: var(--text-primary);
+  border-color: var(--border-focus);
+  transform: translateY(-1px);
+}
+
+.dl-action-btn.secondary:active {
+  transform: translateY(0) scale(0.97);
 }
 
 /* Autocomplete Suggestion Dropdown styling */

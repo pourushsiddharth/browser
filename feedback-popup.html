@@ -233,31 +233,32 @@
   </div>
 
   <script>
-    const { ipcRenderer } = require('electron');
-
     document.getElementById('btn-close').addEventListener('click', () => {
       window.close();
     });
 
+    function openTab(url) {
+      if (window.api && window.api.send) {
+        window.api.send('create-tab', { url, isIncognito: false });
+      }
+      window.close();
+    }
+
     // Link events using create-tab ipc channel
     document.getElementById('btn-website').addEventListener('click', () => {
-      ipcRenderer.send('create-tab', { url: 'https://pourushsiddharth.in', isIncognito: false });
-      window.close();
+      openTab('https://pourushsiddharth.in');
     });
 
     document.getElementById('btn-mail').addEventListener('click', () => {
-      ipcRenderer.send('create-tab', { url: 'mailto:pourushsiddharth@gmail.com', isIncognito: false });
-      window.close();
+      openTab('mailto:pourushsiddharth@gmail.com');
     });
 
     document.getElementById('btn-linkedin').addEventListener('click', () => {
-      ipcRenderer.send('create-tab', { url: 'https://www.linkedin.com/in/pourushsiddharth/', isIncognito: false });
-      window.close();
+      openTab('https://www.linkedin.com/in/pourushsiddharth/');
     });
 
     document.getElementById('btn-github').addEventListener('click', () => {
-      ipcRenderer.send('create-tab', { url: 'https://github.com/pourushsiddharth', isIncognito: false });
-      window.close();
+      openTab('https://github.com/pourushsiddharth');
     });
   </script>
 </body>

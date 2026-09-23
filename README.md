@@ -1,114 +1,104 @@
-<div align="center">
-  <img src="vayu_app_logo.png" alt="Vayu Browser Logo" width="120" />
+# Vayu Browser
 
-  # 🌬️ Vayu Browser
-
-  **A sleek, ultra-fast, and privacy-focused desktop web browser built with Electron and Chromium.**
-
-  [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](package.json)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-  [![Electron](https://img.shields.io/badge/Electron-31.0.0-47848F.svg)](https://www.electronjs.org/)
-  [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
-
-</div>
+A privacy-focused desktop web browser built on Chromium and Electron.
 
 ---
 
-## 🌟 Overview
+## Overview
 
-**Vayu Browser** is engineered for speed, simplicity, and privacy. Designed with a minimal cognitive footprint, Vayu eliminates web clutter while providing modern browsing features such as built-in ad blocking, incognito mode, customizable new tabs, reader view, and multi-engine web search.
+Vayu Browser is a lightweight desktop browser designed for speed, privacy, and simplicity. It provides an efficient browsing environment with built-in content blocking, customizable new tabs, privacy modes, and minimal resource usage.
 
----
+## Features
 
-## ✨ Features
+- **Ad and Tracker Protection**: Integrated content blocking engine that filters intrusive ads and third-party trackers.
+- **Private Browsing**: Incognito sessions that prevent history, cookies, and local data persistence.
+- **Performance Optimized**: Low-overhead architecture powered by Electron and modern Chromium WebContents views.
+- **Customizable Start Page**: Configurable new tab environment with shortcuts, search engine selection, and widgets.
+- **Multi-Engine Search Support**: Quick switching between Google, DuckDuckGo, Bing, Yahoo, Yandex, Qmamu, and Sarvam AI.
+- **Reader Mode**: Distraction-free article reader that strips clutter, sidebars, and ads.
+- **Tab and Window Management**: Pinned tabs, tab groups, compact chrome toggles, and full-screen view.
+- **Local Data Management**: Built-in bookmarking, history management, and download monitoring.
 
-- 🛡️ **Built-in Shield (Ad & Tracker Blocker):** Automatically blocks intrusive advertisements, tracking scripts, and popups for faster page loads and enhanced privacy.
-- 🔒 **Incognito & Private Tabs:** Browse without leaving local trace—history, cookies, and cache are cleared automatically.
-- ⚡ **Ultra-Fast & Responsive:** Powered by Chromium and Electron with optimized WebContents view rendering.
-- 🎨 **Sleek New Tab Page:** Custom start page with clock, smart greetings, wallpaper backgrounds, quick access shortcuts, and search widgets.
-- 🔍 **Multi-Search Engine Integration:** Seamlessly search using Google, DuckDuckGo, Bing, Yahoo, Yandex, Qmamu, or Sarvam AI.
-- 📖 **Distraction-Free Reader Mode:** Converts articles into clean, readable text layouts free of advertisements and sidebars.
-- 📑 **Advanced Tab & Header Management:**
-  - Tab grouping, pinned tabs, and smooth switching.
-  - Immersive full-screen mode and compact header toggles for maximum screen area.
-- 🔖 **Bookmarks & History:** Complete bookmark management bar alongside searchable browsing history.
-- ⬇️ **Download Manager:** Integrated downloads tray to monitor and manage file downloads easily.
+## System Requirements
 
----
+- Windows 10 / 11 (x64)
+- Node.js 18.0.0 or higher
+- npm 9.0.0 or higher
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-Ensure you have [Node.js](https://nodejs.org/) (v18 or higher recommended) and `npm` installed on your machine.
+## Getting Started
 
 ### Installation
 
-1. **Clone the repository:**
+1. Clone the repository:
    ```bash
    git clone https://github.com/pourushsiddharth/browser.git
    cd browser
    ```
 
-2. **Install dependencies:**
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-3. **Launch Vayu Browser:**
+3. Run the application in development mode:
    ```bash
    npm start
    ```
 
-> 💡 **Windows Shortcut:** You can also double-click `Start Orbit.bat` to quickly run the browser without opening a command prompt.
+## Build and Distribution
 
----
-
-## 📦 Building & Packaging
-
-### Standard Windows Build (Unpacked)
-To create an unpacked executable version for Windows:
+### Unpacked Distribution
+To create an unpacked Windows application build:
 ```bash
 npm run build
 ```
-The compiled application output will be saved in the `dist/` directory.
+Build artifacts are placed in the `dist/` directory.
 
-### Windows NSIS Installer Setup
-To generate a standalone setup wizard installer (`.exe`):
+### Windows Installer
+To package the application into a standalone NSIS installer executable:
 ```bash
 npm run dist
 ```
-The generated installer will be located under `dist/installer/`.
+The installer output is generated in `dist/installer/`.
 
----
+## Testing
 
-## 🛠️ Project Structure
-
-```
-├── main.js                   # Electron main process & window lifecycle
-├── adblocker.js               # Ad & tracker blocking engine logic
-├── preload.js                # Preload bridge for secure IPC communication
-├── renderer.js               # Browser UI renderer & tab control
-├── index.html                # Main browser container layout
-├── style.css                 # Main application styling
-├── newtab.html / .js / .css  # Customizable New Tab page
-├── setup-wizard.*            # Initial browser setup & onboarding wizard
-├── build/                    # Installer configuration & custom NSIS scripts
-├── vayu_app_logo.png         # Official Vayu app branding assets
-└── package.json              # Project dependencies & build configurations
+Execute the automated unit and integration test suite:
+```bash
+npm test
 ```
 
----
+## Documentation
 
-## 📬 Feedback & Support
+- [System Architecture](docs/ARCHITECTURE.md): Multi-process design, IPC contracts, and privacy boundaries.
+- [Development Guide](docs/DEVELOPMENT.md): Setup, coding standards, and build instructions.
 
-If you encounter any issues, have suggestions, or want to contribute to Vayu Browser:
-- **Author:** Pourush Siddharth
-- **Email:** [pourushsiddharth@gmail.com](mailto:pourushsiddharth@gmail.com)
-- **GitHub Repository:** [pourushsiddharth/browser](https://github.com/pourushsiddharth/browser)
+## Repository Structure
 
----
+```
+.
+├── main.js                  # Application lifecycle and main process logic
+├── preload.js               # Context isolation and IPC bridge
+├── renderer.js              # Browser interface controller and tab orchestration
+├── adblocker.js             # Network request filtering and tracker protection
+├── index.html               # Main window shell markup
+├── style.css                # Interface stylesheets
+├── newtab.html / .js / .css # Custom new tab page implementation
+├── setup-wizard.*           # Initial onboarding setup wizard
+├── build/                   # Packaging assets and NSIS build scripts
+└── package.json             # Project dependencies and script definitions
+```
 
-<div align="center">
-  <sub>Built with ❤️ using Electron & Chromium | © 2026 Vayu Browser</sub>
-</div>
+## Security and Privacy
+
+Vayu Browser executes web sessions with strict context isolation, disabled Node.js integration inside web views, and sandboxed content processes. Local browsing logs and cached credentials remain strictly local to the user's system.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contact
+
+- **Author**: Pourush Siddharth
+- **Email**: pourushsiddharth@gmail.com
+- **Repository**: [https://github.com/pourushsiddharth/browser](https://github.com/pourushsiddharth/browser)

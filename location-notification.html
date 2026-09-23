@@ -731,8 +731,6 @@
   </div>
 
   <script>
-    const { ipcRenderer } = require('electron');
-    
     // Parse query params to show domain
     const urlParams = new URLSearchParams(window.location.search);
     const domain = urlParams.get('domain') || 'vayu.in';
@@ -794,11 +792,13 @@
       applyOptionsFilter(relevantOptions);
     }, 350);
 
-    ipcRenderer.on('sarvam-update', (event, updatedOptions) => {
-      if (Array.isArray(updatedOptions)) {
-        applyOptionsFilter(updatedOptions);
-      }
-    });
+    if (window.api && window.api.on) {
+      window.api.on('sarvam-update', (updatedOptions) => {
+        if (Array.isArray(updatedOptions)) {
+          applyOptionsFilter(updatedOptions);
+        }
+      });
+    }
 
     // Custom Alert logic
     const customAlert = document.getElementById('custom-alert');

@@ -1,8 +1,33 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, session, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, session, Menu, MenuItem, safeStorage } = require('electron');
 app.name = 'Vayu';
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+
+// Load environment variables safely from .env if present
+function loadEnv() {
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      content.split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const idx = trimmed.indexOf('=');
+          if (idx !== -1) {
+            const key = trimmed.slice(0, idx).trim();
+            const val = trimmed.slice(idx + 1).trim();
+            if (!process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        }
+      });
+    }
+  } catch (e) {}
+}
+loadEnv();
 
 // Global error handlers to capture main process crashes/exceptions
 process.on('uncaughtException', (err) => {
@@ -21,7 +46,15 @@ process.on('unhandledRejection', (reason, promise) => {
   } catch (e) {}
 });
 
-const adblocker = require('./adblocker');
+// Modularized Subsystems
+const dbModule = require('./src/main/db');
+const { loadDb: initDb, saveDb: persistDb, encryptPassword, decryptPassword } = dbModule;
+const security = require('./src/browser/security');
+const adblocker = require('./src/browser/adblock');
+const sessionManager = require('./src/main/session-manager');
+const permissionsManager = require('./src/main/permissions');
+const downloadsManager = require('./src/main/downloads');
+const { initAutoUpdater } = require('./src/main/updater');
 
 // Load custom widget promo banner background and logo
 let vayuWidgetBase64 = '';
@@ -60,68 +93,18 @@ let isChromeHovered = false;
 let currentY = 124;
 let animationInterval = null;
 
-// Database Path
-const dbPath = path.join(app.getPath('userData'), 'orbit-data.json');
-let db = {
-  history: [],
-  bookmarks: [],
-  settings: {
-    adBlockEnabled: true,
-    homepage: 'orbit://newtab'
-  },
-  stats: {
-    totalBlocked: 0
-  },
-  permissions: {},
-  passwords: []
-};
-
+// Database instance proxy backed by modular storage
+let db = dbModule.getDb();
 let dbDirty = false;
 
-// Load Database
 function loadDb() {
-  try {
-    if (fs.existsSync(dbPath)) {
-      const data = fs.readFileSync(dbPath, 'utf8');
-      db = JSON.parse(data);
-      // Ensure arrays/objects exist and are sanitized
-      if (!Array.isArray(db.history)) {
-        db.history = [];
-      } else {
-        db.history = db.history.filter(item => item && typeof item === 'object' && typeof item.url === 'string');
-      }
-      if (!Array.isArray(db.bookmarks)) {
-        db.bookmarks = [];
-      } else {
-        db.bookmarks = db.bookmarks.filter(item => item && typeof item === 'object' && typeof item.url === 'string');
-      }
-      if (!Array.isArray(db.downloads)) {
-        db.downloads = [];
-      } else {
-        db.downloads = db.downloads.filter(item => item && typeof item === 'object' && typeof item.id === 'string');
-      }
-      if (!Array.isArray(db.passwords)) {
-        db.passwords = [];
-      } else {
-        db.passwords = db.passwords.filter(item => item && typeof item === 'object' && typeof item.url === 'string');
-      }
-      if (!db.settings) db.settings = { adBlockEnabled: true, homepage: 'orbit://newtab' };
-      if (!db.stats) db.stats = { totalBlocked: 0 };
-      if (!db.permissions) db.permissions = {};
-    }
-  } catch (err) {
-    console.error('Failed to load browser data database', err);
-  }
+  db = dbModule.loadDb();
+  return db;
 }
 
-// Save Database
 function saveDb() {
-  try {
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf8');
-    dbDirty = false;
-  } catch (err) {
-    console.error('Failed to save browser data database', err);
-  }
+  dbModule.saveDb();
+  dbDirty = false;
 }
 
 function queryRegistryDword(registryKey, valueName) {
@@ -447,8 +430,9 @@ function setupContextMenu(webContents) {
       skipTaskbar: true,
       parent: mainWindow,
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
+        preload: path.join(__dirname, 'preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true
       }
     });
 
@@ -1413,141 +1397,25 @@ function removeImmersiveUi(tab) {
 }
 
 function registerDownloadHandler(sess, isIncognito) {
-  sess.on('will-download', (event, item, webContents) => {
-    const filename = item.getFilename();
-    const url = item.getURL();
-
-    // Check with Sarvam AI or local fast heuristic if the user is downloading another browser
-    const lowercaseFn = filename.toLowerCase();
-    const lowercaseUrl = url.toLowerCase();
-    const isBrowserDownloadLocal = 
-      lowercaseFn.includes('chrome') || lowercaseFn.includes('firefox') || 
-      lowercaseFn.includes('opera') || lowercaseFn.includes('brave') || 
-      lowercaseFn.includes('safari') || lowercaseFn.includes('edge') || 
-      lowercaseUrl.includes('chrome') || lowercaseUrl.includes('firefox') || 
-      lowercaseUrl.includes('opera') || lowercaseUrl.includes('brave') || 
-      lowercaseUrl.includes('edge');
-
-    if (isBrowserDownloadLocal) {
+  downloadsManager.setupDownloadManager(sess, isIncognito, {
+    onBrowserDownloadDetected: (filename, url) => {
       showLockPointerTooltip('Optimized for you', 'Vayu Browser is already optimized for you. Why switch?');
-    }
-
-    // Call Sarvam AI in parallel for deeper detection
-    fetch('https://api.sarvam.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-subscription-key': SARVAM_API_KEY,
-        'Authorization': `Bearer ${SARVAM_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'sarvam-105b',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are the security brain of Vayu Browser. Determine if the given filename or URL is a web browser installation package or setup (e.g. Chrome, Firefox, Opera, Brave, Edge, Safari, Vivaldi, etc.). Respond strictly with a JSON object: {"isBrowser": true} or {"isBrowser": false}.'
-          },
-          {
-            role: 'user',
-            content: `Filename: ${filename}, URL: ${url}`
-          }
-        ],
-        temperature: 0.1
-      })
-    }).then(res => res.json()).then(data => {
-      if (data && data.choices && data.choices[0] && data.choices[0].message) {
-        const text = data.choices[0].message.content.trim();
-        const match = text.match(/\{.*?\}/s);
-        if (match) {
-          const result = JSON.parse(match[0]);
-          if (result && result.isBrowser === true) {
-            showLockPointerTooltip('Optimized for you', 'Vayu Browser is already optimized for you. Why switch?');
-          }
-        }
-      }
-    }).catch(() => {});
-
-    const downloadId = 'dl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-    activeDownloads.set(downloadId, item);
-
-    const totalBytes = item.getTotalBytes();
-    const date = new Date().toISOString();
-
-    const downloadState = {
-      id: downloadId,
-      filename: filename,
-      totalBytes: totalBytes,
-      receivedBytes: 0,
-      status: 'progressing',
-      url: url,
-      savePath: item.getSavePath() || '',
-      date: date,
-      isIncognito: isIncognito
-    };
-
-    if (!isIncognito) {
-      if (!db.downloads) db.downloads = [];
-      db.downloads.unshift(downloadState);
-      dbDirty = true;
-    }
-
-    if (mainWindow && !mainWindow.webContents.isDestroyed()) {
-      mainWindow.webContents.send('download-started', downloadState);
-    }
-
-    item.on('updated', (event, state) => {
-      if (state === 'interrupted') {
-        downloadState.status = 'interrupted';
-      } else if (state === 'progressing') {
-        downloadState.status = 'progressing';
-        downloadState.receivedBytes = item.getReceivedBytes();
-        downloadState.savePath = item.getSavePath();
-      }
-
-      if (!isIncognito) {
-        const idx = db.downloads.findIndex(d => d.id === downloadId);
-        if (idx !== -1) {
-          db.downloads[idx] = { ...db.downloads[idx], ...downloadState };
-          dbDirty = true;
-        }
-      }
-
+    },
+    onDownloadStarted: (downloadState) => {
       if (mainWindow && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.send('download-updated', {
-          id: downloadId,
-          receivedBytes: downloadState.receivedBytes,
-          status: downloadState.status,
-          savePath: downloadState.savePath
-        });
+        mainWindow.webContents.send('download-started', downloadState);
       }
-    });
-
-    item.once('done', (event, state) => {
-      activeDownloads.delete(downloadId);
-      
-      if (state === 'completed') {
-        downloadState.status = 'completed';
-        downloadState.receivedBytes = totalBytes || item.getReceivedBytes();
-        downloadState.savePath = item.getSavePath();
-      } else if (state === 'cancelled') {
-        downloadState.status = 'cancelled';
-      } else {
-        downloadState.status = 'failed';
+    },
+    onDownloadUpdated: (update) => {
+      if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('download-updated', update);
       }
-
-      if (!isIncognito) {
-        const idx = db.downloads.findIndex(d => d.id === downloadId);
-        if (idx !== -1) {
-          db.downloads[idx] = { ...db.downloads[idx], ...downloadState };
-          dbDirty = true;
-          saveDb();
-        }
-      }
-
+    },
+    onDownloadDone: (downloadState) => {
       if (mainWindow && !mainWindow.webContents.isDestroyed()) {
         mainWindow.webContents.send('download-done', downloadState);
       }
-    });
+    }
   });
 }
 
@@ -1619,8 +1487,8 @@ function createWindow() {
       skipTaskbar: true,
       parent: mainWindow,
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
+        nodeIntegration: false,
+        contextIsolation: true
       }
     });
 
@@ -1712,11 +1580,12 @@ function createWindow() {
     return true;
   };
 
-  session.defaultSession.setPermissionRequestHandler(handlePermissionRequest);
-  session.fromPartition('incognito').setPermissionRequestHandler(handlePermissionRequest);
-
-  session.defaultSession.setPermissionCheckHandler(handlePermissionCheck);
-  session.fromPartition('incognito').setPermissionCheckHandler(handlePermissionCheck);
+  permissionsManager.setupPermissionHandlers(session.defaultSession, {
+    onPermissionDeniedTooltip: showLockPointerTooltip
+  });
+  permissionsManager.setupPermissionHandlers(session.fromPartition('incognito'), {
+    onPermissionDeniedTooltip: showLockPointerTooltip
+  });
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -1736,7 +1605,23 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
   setupContextMenu(mainWindow.webContents);
-  // initGeminiNotifications();
+
+  // Session Restore: if restoreSession is enabled and previous tabs exist, restore them
+  mainWindow.webContents.once('did-finish-load', () => {
+    const savedSession = sessionManager.getRestorableSession();
+    if (savedSession && Array.isArray(savedSession.tabs) && savedSession.tabs.length > 0) {
+      console.log(`[SessionRestore] Restoring ${savedSession.tabs.length} tabs from previous session.`);
+      savedSession.tabs.forEach((t, idx) => {
+        mainWindow.webContents.send('tab-created-external', {
+          url: t.url,
+          isIncognito: false
+        });
+      });
+    }
+
+    // Auto-update checker initialization
+    initAutoUpdater(mainWindow);
+  });
 
   mainWindow.on('focus', () => {
     if (activeTabId && tabs.has(activeTabId)) {
@@ -1850,7 +1735,7 @@ function showShieldPopup(rect) {
   });
 }
 
-const SARVAM_API_KEY = 'sk_b5ycfgx0_CuJBNw0kCZV0QF2pvRkV8N9H';
+const SARVAM_API_KEY = process.env.SARVAM_API_KEY || '';
 const sarvamBrainCache = new Map();
 
 function getLocalFastRecommendations(domain) {
@@ -1944,8 +1829,9 @@ function showLocationNotification(url) {
     skipTaskbar: true,
     parent: mainWindow, // Make it a child of main window
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
     }
   });
 
@@ -2002,8 +1888,9 @@ function showFeedbackPopup(rect) {
     skipTaskbar: true,
     parent: mainWindow,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
     }
   });
 
@@ -2146,9 +2033,32 @@ function createTab(tabId, url, isIncognito = false) {
   webContentsToTabIdMap.set(view.webContents.id, tabId);
   setupContextMenu(view.webContents);
 
-  // Set window open handler to prevent popups and redirect target="_blank" links to new tabs
+  // Navigation guards: prevent untrusted navigation to file: or orbit: schemes from web content
+  view.webContents.on('will-navigate', (event, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      if (parsed.protocol === 'file:' || (parsed.protocol === 'orbit:' && parsed.hostname !== 'newtab' && !navigationUrl.includes('newtab.html'))) {
+        event.preventDefault();
+        return;
+      }
+    } catch (e) {
+      event.preventDefault();
+      return;
+    }
+  });
+
+  // Set window open handler to prevent popups and redirect target="_blank" links to new tabs safely
   view.webContents.setWindowOpenHandler((details) => {
-    if (mainWindow) {
+    try {
+      const parsed = new URL(details.url);
+      if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+        return { action: 'deny' };
+      }
+    } catch (e) {
+      return { action: 'deny' };
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('tab-created-external', { url: details.url, isIncognito });
     }
     return { action: 'deny' };
@@ -2173,7 +2083,7 @@ function createTab(tabId, url, isIncognito = false) {
           });
         }
       }
-    } else {
+    } else if (!isIncognito) {
       try {
         fs.appendFileSync('c:\\Users\\pouru\\OneDrive\\Desktop\\Project\\browser\\orbit-error.log', `[console tab-${tabId}] level: ${level}, message: ${message} (line: ${line}, source: ${sourceId})\n`);
       } catch (e) {}
@@ -2832,8 +2742,9 @@ function createTab(tabId, url, isIncognito = false) {
   });
 
   view.webContents.on('will-submit-form', (event, details) => {
-    if (!details) return;
+    if (!details || tab.isIncognito) return;
     const pageUrl = view.webContents.getURL();
+    if (!pageUrl || !pageUrl.startsWith('https://')) return;
     const pageTitle = view.webContents.getTitle();
     savePasswordEntryIfPresent(details, pageUrl, pageTitle);
   });
@@ -2851,7 +2762,7 @@ function createTab(tabId, url, isIncognito = false) {
   });
 
   view.webContents.on('did-navigate', (event, currentUrl) => {
-    logHistory(currentUrl, view.webContents.getTitle());
+    logHistory(tab, currentUrl, view.webContents.getTitle());
     let displayUrl = currentUrl;
     if (currentUrl.includes('newtab.html') && !currentUrl.startsWith('view-source:')) {
       displayUrl = 'orbit://newtab';
@@ -2871,6 +2782,8 @@ function createTab(tabId, url, isIncognito = false) {
     if (mainWindow) {
       mainWindow.webContents.send('update-address', { id: tabId, url: displayUrl });
     }
+    // Update session state for crash recovery & session restore
+    sessionManager.saveSessionState(tabs, activeTabId);
   });
 
   view.webContents.on('did-navigate-in-page', (event, currentUrl) => {
@@ -3074,6 +2987,14 @@ function createTab(tabId, url, isIncognito = false) {
     }
   });
 
+  // Crash Recovery: detect renderer crash / OOM and provide graceful recovery UI
+  view.webContents.on('render-process-gone', (event, details) => {
+    tab.isCrashed = true;
+    console.error(`[TabCrash] Tab ${tabId} crashed: reason=${details.reason}, exitCode=${details.exitCode}`);
+    const errorUrl = `file://${path.join(__dirname, 'error.html')}?url=${encodeURIComponent(tab.url || '')}&error=${encodeURIComponent('The page stopped responding (' + details.reason + ')')}`;
+    view.webContents.loadURL(errorUrl).catch(() => {});
+  });
+
   // Handle connection and load failures by showing custom error page
   view.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
@@ -3194,6 +3115,20 @@ function parseSubmittedFormData(details) {
   return {};
 }
 
+function isTrustedSender(event) {
+  if (!event || !event.sender) return false;
+  if (mainWindow && !mainWindow.isDestroyed() && event.sender.id === mainWindow.webContents.id) {
+    return true;
+  }
+  const trustedWindows = [customContextMenuWin, lockPointerWin, locationNotificationWin, feedbackPopup];
+  for (const win of trustedWindows) {
+    if (win && !win.isDestroyed() && event.sender.id === win.webContents.id) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function savePasswordEntryIfPresent(details, pageUrl, pageTitle) {
   if (!details || !pageUrl) return;
 
@@ -3207,16 +3142,17 @@ function savePasswordEntryIfPresent(details, pageUrl, pageTitle) {
     if (!username || !password) return;
 
     const site = url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    const encryptedPassword = encryptPassword(password);
     const normalizedEntry = {
       id: `pw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       url: site,
       title: pageTitle || parsedUrl.hostname,
       username,
-      password,
+      password: encryptedPassword,
       createdAt: Date.now()
     };
 
-    const exists = db.passwords.some((item) => item.url === site && item.username === username && item.password === password);
+    const exists = db.passwords.some((item) => item.url === site && item.username === username && decryptPassword(item.password) === password);
     if (!exists) {
       db.passwords.unshift(normalizedEntry);
       if (db.passwords.length > 200) {
@@ -3224,7 +3160,11 @@ function savePasswordEntryIfPresent(details, pageUrl, pageTitle) {
       }
       saveDb();
       if (mainWindow && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.send('passwords-data', db.passwords);
+        const decryptedList = db.passwords.map(p => ({
+          ...p,
+          password: decryptPassword(p.password)
+        }));
+        mainWindow.webContents.send('passwords-data', decryptedList);
       }
     }
   } catch (err) {
@@ -3232,14 +3172,10 @@ function savePasswordEntryIfPresent(details, pageUrl, pageTitle) {
   }
 }
 
-function logHistory(url, title) {
+function logHistory(tab, url, title) {
   // Do not log history for incognito or orbit internal urls
-  if (activeTabId && tabs.has(activeTabId)) {
-    const tab = tabs.get(activeTabId);
-    if (tab.isIncognito) return;
-  }
-
-  if (!url || url.startsWith('file://') || url.includes('newtab.html')) return;
+  if (!tab || tab.isIncognito) return;
+  if (!url || url.startsWith('file://') || url.includes('newtab.html') || url.startsWith('orbit:')) return;
 
   const historyItem = {
     url,
@@ -3257,17 +3193,20 @@ function logHistory(url, title) {
   }
 
   saveDb();
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('history-data', db.history);
   }
 }
 
 // IPC Channel Handlers
 ipcMain.on('create-tab', (event, { id, url, isIncognito }) => {
+  if (!isTrustedSender(event)) return;
   createTab(id, url, isIncognito);
+  sessionManager.saveSessionState(tabs, activeTabId);
 });
 
 ipcMain.on('switch-tab', (event, tabId) => {
+  if (!isTrustedSender(event)) return;
   if (activeTabId && tabs.has(activeTabId)) {
     const oldTab = tabs.get(activeTabId);
     mainWindow.contentView.removeChildView(oldTab.view);
@@ -3290,10 +3229,12 @@ ipcMain.on('switch-tab', (event, tabId) => {
     // Send update
     mainWindow.webContents.send('tab-focused', activeTabId);
     mainWindow.webContents.send('blocked-count', { tabId: activeTabId, count: newTab.blockedCount || 0 });
+    sessionManager.saveSessionState(tabs, activeTabId);
   }
 });
 
 ipcMain.on('close-tab', (event, tabId) => {
+  if (!isTrustedSender(event)) return;
   if (tabs.has(tabId)) {
     const tab = tabs.get(tabId);
     
@@ -3314,10 +3255,29 @@ ipcMain.on('close-tab', (event, tabId) => {
     
     tab.view.webContents.destroy();
     tabs.delete(tabId);
+
+    // Incognito privacy cleanup: if no active incognito tabs remain, purge incognito partition storage & cache
+    let remainingIncognito = false;
+    for (const t of tabs.values()) {
+      if (t.isIncognito) {
+        remainingIncognito = true;
+        break;
+      }
+    }
+    if (!remainingIncognito) {
+      try {
+        const incognitoSession = session.fromPartition('incognito');
+        incognitoSession.clearStorageData().catch(() => {});
+        incognitoSession.clearCache().catch(() => {});
+      } catch (e) {}
+    }
+
+    sessionManager.saveSessionState(tabs, activeTabId);
   }
 });
 
 ipcMain.on('navigate-tab', (event, { id, url }) => {
+  if (!isTrustedSender(event)) return;
   if (tabs.has(id)) {
     const tab = tabs.get(id);
     navigateTab(tab, url);
@@ -3325,6 +3285,7 @@ ipcMain.on('navigate-tab', (event, { id, url }) => {
 });
 
 ipcMain.on('back-tab', (event, tabId) => {
+  if (!isTrustedSender(event)) return;
   if (tabs.has(tabId)) {
     const tab = tabs.get(tabId);
     if (tab.view.webContents.canGoBack()) {
@@ -3334,6 +3295,7 @@ ipcMain.on('back-tab', (event, tabId) => {
 });
 
 ipcMain.on('forward-tab', (event, tabId) => {
+  if (!isTrustedSender(event)) return;
   if (tabs.has(tabId)) {
     const tab = tabs.get(tabId);
     if (tab.view.webContents.canGoForward()) {
@@ -3343,6 +3305,7 @@ ipcMain.on('forward-tab', (event, tabId) => {
 });
 
 ipcMain.on('reload-tab', (event, tabId) => {
+  if (!isTrustedSender(event)) return;
   if (tabs.has(tabId)) {
     const tab = tabs.get(tabId);
     tab.view.webContents.reload();
@@ -3351,21 +3314,29 @@ ipcMain.on('reload-tab', (event, tabId) => {
 
 // History & Bookmarks IPCs
 ipcMain.on('get-history', (event) => {
+  if (!isTrustedSender(event)) return;
   event.reply('history-data', db.history);
 });
 
 ipcMain.on('clear-history', (event) => {
+  if (!isTrustedSender(event)) return;
   db.history = [];
   saveDb();
   event.reply('history-data', db.history);
 });
 
 ipcMain.on('get-bookmarks', (event) => {
+  if (!isTrustedSender(event)) return;
   event.reply('bookmarks-data', db.bookmarks);
 });
 
 ipcMain.on('get-passwords', (event) => {
-  event.reply('passwords-data', db.passwords || []);
+  if (!isTrustedSender(event)) return;
+  const decryptedList = (db.passwords || []).map(p => ({
+    ...p,
+    password: decryptPassword(p.password)
+  }));
+  event.reply('passwords-data', decryptedList);
 });
 
 ipcMain.on('clear-passwords', (event) => {
@@ -3692,38 +3663,52 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('will-quit', () => {
+  try {
+    const incognitoSession = session.fromPartition('incognito');
+    incognitoSession.clearStorageData().catch(() => {});
+    incognitoSession.clearCache().catch(() => {});
+  } catch (e) {}
+});
+
 ipcMain.on('get-downloads', (event) => {
+  if (!isTrustedSender(event)) return;
   event.reply('downloads-data', db.downloads || []);
 });
 
 ipcMain.on('clear-downloads', (event) => {
+  if (!isTrustedSender(event)) return;
   db.downloads = [];
   saveDb();
   event.reply('downloads-data', []);
 });
 
 ipcMain.on('pause-download', (event, id) => {
-  const item = activeDownloads.get(id);
+  if (!isTrustedSender(event)) return;
+  const item = downloadsManager.getActiveDownload(id);
   if (item) {
     item.pause();
   }
 });
 
 ipcMain.on('resume-download', (event, id) => {
-  const item = activeDownloads.get(id);
+  if (!isTrustedSender(event)) return;
+  const item = downloadsManager.getActiveDownload(id);
   if (item) {
     item.resume();
   }
 });
 
 ipcMain.on('cancel-download', (event, id) => {
-  const item = activeDownloads.get(id);
+  if (!isTrustedSender(event)) return;
+  const item = downloadsManager.getActiveDownload(id);
   if (item) {
     item.cancel();
   }
 });
 
 ipcMain.on('open-download', (event, filePath) => {
+  if (!isTrustedSender(event)) return;
   if (!filePath) return;
   const { shell } = require('electron');
   shell.openPath(filePath).catch(err => {
@@ -3732,12 +3717,14 @@ ipcMain.on('open-download', (event, filePath) => {
 });
 
 ipcMain.on('show-download-in-folder', (event, filePath) => {
+  if (!isTrustedSender(event)) return;
   if (!filePath) return;
   const { shell } = require('electron');
   shell.showItemInFolder(filePath);
 });
 
 ipcMain.on('log-to-main', (event, msg) => {
+  if (!isTrustedSender(event)) return;
   console.log('[renderer]', msg);
   try {
     fs.appendFileSync('c:\\Users\\pouru\\OneDrive\\Desktop\\Project\\browser\\orbit-error.log', `[renderer] ${msg}\n`);

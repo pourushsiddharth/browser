@@ -40,7 +40,11 @@ contextBridge.exposeInMainWorld('api', {
       'open-download',
       'show-download-in-folder',
       'get-downloads',
-      'clear-downloads'
+      'clear-downloads',
+      'get-passwords',
+      'clear-passwords',
+      'custom-context-menu-action',
+      'context-menu-action'
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
@@ -67,7 +71,10 @@ contextBridge.exposeInMainWorld('api', {
       'download-started',
       'download-updated',
       'download-done',
-      'downloads-data'
+      'downloads-data',
+      'passwords-data',
+      'sarvam-contextmenu-resolved',
+      'sarvam-update'
     ];
     if (validChannels.includes(channel)) {
       const subscription = (event, ...args) => func(...args);
