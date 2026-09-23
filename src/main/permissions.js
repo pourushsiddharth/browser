@@ -47,50 +47,53 @@ function setupPermissionHandlers(sess, options = {}) {
       }
     }
 
-    // Default to allow if not explicitly denied (consistent with current user experience)
-    callback(true);
+    // Sensitive permissions must be denied by default unless explicitly granted by user
+    const SENSITIVE_PERMISSIONS = ['location', 'camera', 'microphone', 'clipboard-read'];
+    if (SENSITIVE_PERMISSIONS.includes(mapped) || mapped === 'clipboard') {
+      if (typeof onPermissionDeniedTooltip === 'function') {
+        onPermissionDeniedTooltip('Permission Blocked', `Click lock icon to allow ${mapped} for ${domain}`);
+      }
+      return callback(false);
+    }
+
+    // Non-sensitive permissions (e.g. notifications/fullscreen) can default to prompt or allow
+    callback(false);
   });
 
   sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
     const domain = getOrigin(requestingOrigin);
     const db = getDb();
+    const mapped = normalizePermission(permission);
 
     if (db.permissions && db.permissions[domain]) {
       const perms = db.permissions[domain];
 
-      if (permission === 'geolocation' && (perms.location === false || perms.location === 'deny')) {
-        if (typeof onPermissionDeniedTooltip === 'function') {
-          onPermissionDeniedTooltip('Click Lock Icon Here', `Enable location for ${domain}`);
-        }
-        return false;
+      if (permission === 'geolocation') {
+        return perms.location === true || perms.location === 'allow';
       }
 
       if (permission === 'media') {
         const mediaType = details && details.mediaType;
-        if (mediaType === 'video' && (perms.camera === false || perms.camera === 'deny')) {
-          if (typeof onPermissionDeniedTooltip === 'function') {
-            onPermissionDeniedTooltip('Click Lock Icon Here', `Enable camera for ${domain}`);
-          }
-          return false;
+        if (mediaType === 'video') {
+          return perms.camera === true || perms.camera === 'allow';
         }
-        if (mediaType === 'audio' && (perms.microphone === false || perms.microphone === 'deny')) {
-          if (typeof onPermissionDeniedTooltip === 'function') {
-            onPermissionDeniedTooltip('Click Lock Icon Here', `Enable microphone for ${domain}`);
-          }
-          return false;
+        if (mediaType === 'audio') {
+          return perms.microphone === true || perms.microphone === 'allow';
         }
       }
 
-      const mapped = normalizePermission(permission);
-      if (perms[mapped] === false || perms[mapped] === 'deny') {
-        if (typeof onPermissionDeniedTooltip === 'function') {
-          onPermissionDeniedTooltip('Click Lock Icon Here', `Enable ${mapped} for ${domain}`);
-        }
-        return false;
+      if (perms[mapped] !== undefined) {
+        return perms[mapped] === true || perms[mapped] === 'allow';
       }
     }
 
-    return true;
+    // Default to deny for sensitive checks
+    const SENSITIVE_PERMISSIONS = ['geolocation', 'location', 'camera', 'microphone', 'media'];
+    if (SENSITIVE_PERMISSIONS.includes(permission) || SENSITIVE_PERMISSIONS.includes(mapped)) {
+      return false;
+    }
+
+    return false;
   });
 }
 
@@ -108,16 +111,17 @@ function setPermission(domain, permission, value) {
 }
 
 /**
- * Gets the current permissions map for a domain
+ * Gets the current permissions map for a domain (defaults to secure false for sensitive items)
  */
 function getPermissionsForDomain(domain) {
   const db = getDb();
-  return (db.permissions && db.permissions[domain]) || {
-    location: true,
-    downloads: true,
-    clipboard: true,
-    camera: true,
-    microphone: true
+  const domainPerms = (db.permissions && db.permissions[domain]) || {};
+  return {
+    location: domainPerms.location === true || domainPerms.location === 'allow',
+    downloads: domainPerms.downloads !== undefined ? (domainPerms.downloads === true || domainPerms.downloads === 'allow') : true,
+    clipboard: domainPerms.clipboard === true || domainPerms.clipboard === 'allow',
+    camera: domainPerms.camera === true || domainPerms.camera === 'allow',
+    microphone: domainPerms.microphone === true || domainPerms.microphone === 'allow'
   };
 }
 

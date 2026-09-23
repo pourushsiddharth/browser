@@ -1835,17 +1835,17 @@ function showLocationNotification(url) {
     }
   });
 
-  const permissions = (db.permissions && db.permissions[domain]) || { location: true, downloads: true, clipboard: true, camera: true, microphone: true };
+  const permissions = getPermissionsForDomain(domain);
   const relevantOptions = fetchSarvamAiRecommendations(domain);
 
   locationNotificationWin.loadFile('location-notification.html', {
     query: {
       domain,
-      location: permissions.location !== false ? 'true' : 'false',
-      downloads: permissions.downloads !== false ? 'true' : 'false',
-      clipboard: permissions.clipboard !== false ? 'true' : 'false',
-      camera: permissions.camera !== false ? 'true' : 'false',
-      microphone: permissions.microphone !== false ? 'true' : 'false',
+      location: permissions.location === true ? 'true' : 'false',
+      downloads: permissions.downloads === true ? 'true' : 'false',
+      clipboard: permissions.clipboard === true ? 'true' : 'false',
+      camera: permissions.camera === true ? 'true' : 'false',
+      microphone: permissions.microphone === true ? 'true' : 'false',
       relevant: JSON.stringify(relevantOptions)
     }
   });
